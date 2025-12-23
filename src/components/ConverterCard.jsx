@@ -29,6 +29,11 @@ export default function ConverterCard() {
         }
     }, [currencies]);
 
+    // Ensure the base (fromCurrency) is never present in the target list
+    useEffect(() => {
+        setToCurrencies((prev) => prev.filter((code) => code !== fromCurrency));
+    }, [fromCurrency]);
+
     function addCurrency(currency) {
         if (!currency) return;
 
@@ -39,20 +44,25 @@ export default function ConverterCard() {
 
     useEffect(() => {
         async function fetchRates() {
-            if (toCurrencies.length === 0) return;
+            // Exclude base currency from symbols to avoid API errors
+            const symbols = toCurrencies.filter((code) => code !== fromCurrency);
+            if (symbols.length === 0) {
+                setRates({});
+                return;
+            }
 
             setLoading(true);
             try {
-            const to = toCurrencies.join(",");
-            const resp = await fetch(
-                `https://api.frankfurter.dev/v1/latest?base=${fromCurrency}&symbols=${to}`
-            );
-            const data = await resp.json();
-            setRates(data.rates);
+                const to = symbols.join(",");
+                const resp = await fetch(
+                    `https://api.frankfurter.dev/v1/latest?base=${fromCurrency}&symbols=${to}`
+                );
+                const data = await resp.json();
+                setRates(data.rates);
             } catch (error) {
-            console.error("Error fetching rates:", error);
+                console.error("Error fetching rates:", error);
             } finally {
-            setLoading(false);
+                setLoading(false);
             }
         }
 
