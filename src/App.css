@@ -40,3 +40,11 @@
 .read-the-docs {
   color: #888;
 }
+
+.dropdown-field {
+  text-align: left;
+}
+
+.amount-field {
+  text-align: left;
+}
