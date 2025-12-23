@@ -1,117 +1,131 @@
 import { useEffect, useState } from "react";
+import {
+  Card,
+  CardContent,
+  Typography,
+  TextField,
+  Divider,
+  Stack
+} from "@mui/material";
+
 import CurrencySelect from "./CurrencySelect";
 import ResultList from "./ResultList";
 
 export default function ConverterCard() {
-    const [currencies, setCurrencies] = useState({});
-    const [fromCurrency, setFromCurrency] = useState("PHP");;
-    const [amount, setAmount] = useState(1000);
-    const [toCurrencies, setToCurrencies] = useState(["USD"]);
-    const [rates, setRates] = useState({});
-    const [loading, setLoading] = useState(false);
+  const [currencies, setCurrencies] = useState({});
+  const [fromCurrency, setFromCurrency] = useState("PHP");
+  const [amount, setAmount] = useState(1000);
+  const [toCurrencies, setToCurrencies] = useState(["USD"]);
+  const [rates, setRates] = useState({});
+  const [loading, setLoading] = useState(false);
 
-    useEffect(() => {
-        async function fetchCurrencies() {
-            try{
-                const resp = await fetch("https://api.frankfurter.dev/v1/currencies");
-                const data = await resp.json();
-                setCurrencies(data);
-            }catch(error){
-                console.error("Error fetching currencies:", error);
-            }
-        }
-        fetchCurrencies();
-    }, []);
+  // Fetch supported currencies
+  useEffect(() => {
+    async function fetchCurrencies() {
+      const resp = await fetch("https://api.frankfurter.dev/v1/currencies");
+      const data = await resp.json();
+      setCurrencies(data);
+    }
+    fetchCurrencies();
+  }, []);
 
-    useEffect(() => {
-        if(currencies["PHP"]){
-            setFromCurrency("PHP");
-        }
-    }, [currencies]);
+  // Ensure PHP default
+  useEffect(() => {
+    if (currencies["PHP"]) {
+      setFromCurrency("PHP");
+    }
+  }, [currencies]);
 
-    // Ensure the base (fromCurrency) is never present in the target list
-    useEffect(() => {
-        setToCurrencies((prev) => prev.filter((code) => code !== fromCurrency));
-    }, [fromCurrency]);
+  // Ensure base is not in targets
+  useEffect(() => {
+    setToCurrencies((prev) =>
+      prev.filter((code) => code !== fromCurrency)
+    );
+  }, [fromCurrency]);
 
-    function addCurrency(currency) {
-        if (!currency) return;
+  function addCurrency(currency) {
+    if (!currency) return;
+    if (!toCurrencies.includes(currency)) {
+      setToCurrencies([...toCurrencies, currency]);
+    }
+  }
 
-        if (!toCurrencies.includes(currency)) {
-            setToCurrencies([...toCurrencies, currency]);
-        }
+  // Fetch rates
+  useEffect(() => {
+    async function fetchRates() {
+      // Exclude base currency from target symbols to avoid API error
+      const targetSymbols = toCurrencies.filter(
+        (code) => code !== fromCurrency
+      );
+
+      if (targetSymbols.length === 0) {
+        setRates({});
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const symbols = targetSymbols.join(",");
+        const resp = await fetch(
+          `https://api.frankfurter.dev/v1/latest?base=${fromCurrency}&symbols=${symbols}`
+        );
+        const data = await resp.json();
+        setRates(data.rates || {});
+      } finally {
+        setLoading(false);
+      }
     }
 
-    useEffect(() => {
-        async function fetchRates() {
-            // Exclude base currency from symbols to avoid API errors
-            const symbols = toCurrencies.filter((code) => code !== fromCurrency);
-            if (symbols.length === 0) {
-                setRates({});
-                return;
-            }
+    fetchRates();
+  }, [fromCurrency, toCurrencies]);
 
-            setLoading(true);
-            try {
-                const to = symbols.join(",");
-                const resp = await fetch(
-                    `https://api.frankfurter.dev/v1/latest?base=${fromCurrency}&symbols=${to}`
-                );
-                const data = await resp.json();
-                setRates(data.rates);
-            } catch (error) {
-                console.error("Error fetching rates:", error);
-            } finally {
-                setLoading(false);
-            }
-        }
+  return (
+    <Card sx={{ maxWidth: 420, mx: "auto", mt: 6 }}>
+      <CardContent>
+        <Stack spacing={2}>
+          <Typography variant="h6">
+            Currency Converter
+          </Typography>
 
-        fetchRates();
-    }, [fromCurrency, toCurrencies]);
+          <CurrencySelect
+            label="From Currency"
+            value={fromCurrency}
+            options={currencies}
+            onChange={setFromCurrency}
+          />
 
-    
-    return (
-        <div className="card">
-            <h1>Currency Converter</h1>
+          <TextField
+            label="Amount"
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(Number(e.target.value))}
+            inputProps={{ min: 0, step: 0.01 }}
+            fullWidth
+          />
 
-            <CurrencySelect
-                label="From Currency:"
-                value={fromCurrency}
-                options={currencies}
-                onChange={setFromCurrency}
-            />
-            <div className="amount-field">
-                <label>
-                    Amount:
-                    <input
-                        type="number"
-                        value={amount}
-                        onChange={(e) => setAmount(Number(e.target.value))}
-                        min={0}
-                        step={0.01}
-                        style={{ marginLeft: "8px" }}
-                    />
-                </label>
-            </div>
-            <br />
-            <CurrencySelect
-                label="To Currency:"
-                value=""
-                options={Object.fromEntries(
-                    Object.entries(currencies).filter(
-                    ([code]) =>
-                        code !== fromCurrency && !toCurrencies.includes(code)
-                    )
-                )}
-                onChange={addCurrency}
-            />
-            <hr />
-            <ResultList
-                amount={amount}
-                toCurrencies={toCurrencies}
-                rates={rates}
-                loading={loading}
-            />
-        </div>
-    );
+          <CurrencySelect
+            label="To Currency"
+            value=""
+            options={Object.fromEntries(
+              Object.entries(currencies).filter(
+                ([code]) =>
+                  code !== fromCurrency &&
+                  !toCurrencies.includes(code)
+              )
+            )}
+            onChange={addCurrency}
+          />
+
+          <Divider />
+
+          <ResultList
+            amount={amount}
+            toCurrencies={toCurrencies}
+            rates={rates}
+            loading={loading}
+          />
+        </Stack>
+      </CardContent>
+    </Card>
+  );
 }

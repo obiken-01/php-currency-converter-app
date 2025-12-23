@@ -1,26 +1,30 @@
-export default function CurrencySelect(
-    {
-        label,
-        value,
-        options,
-        onChange
-    }){
+import {
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
+} from "@mui/material";
 
-    return(
-        <>
-            <div className="dropdown-field">
-                <label>{label}&nbsp;
-                    <select value={value} onChange={(e) => onChange(e.target.value)}>
-                        <option value="" disabled>Select currency</option>
-
-                        {Object.entries(options).map(([code, name]) => (
-                            <option key={code} value={code}>
-                                {code} - {name}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-            </div>
-        </>
-    );    
+export default function CurrencySelect({
+  label,
+  value,
+  options,
+  onChange
+}) {
+  return (
+    <FormControl fullWidth>
+      <InputLabel>{label}</InputLabel>
+      <Select
+        value={value}
+        label={label}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {Object.entries(options).map(([code, name]) => (
+          <MenuItem key={code} value={code}>
+            {code} — {name}
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+  );
 }

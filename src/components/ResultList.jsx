@@ -1,26 +1,31 @@
-export default function ResultList(
-    { 
-        amount, 
-        toCurrencies, 
-        rates, 
-        loading
-    }){
-    if (loading) return <p>Loading rates...</p>;
+import { Stack, Typography, Box } from "@mui/material";
 
-    return(
-        <>
-        <div className="results">
-            {toCurrencies.map((code) => (
-                <div key={code} className="rate">
-                <span>{code}</span>&nbsp; = &nbsp;
-                <span>
-                    {rates[code]
-                    ? (amount * rates[code]).toFixed(2)
-                    : "---"}
-                </span>
-                </div>
-            ))}
-        </div>
-        </>
-    );
+export default function ResultList({
+  amount,
+  toCurrencies,
+  rates,
+  loading
+}) {
+  if (loading) {
+    return <Typography>Loading rates...</Typography>;
+  }
+
+  return (
+    <Stack spacing={1}>
+      {toCurrencies.map((code) => (
+        <Box
+          key={code}
+          display="flex"
+          justifyContent="space-between"
+        >
+          <Typography fontWeight={500}>{code}</Typography>
+          <Typography>
+            {rates[code]
+              ? (amount * rates[code]).toFixed(2)
+              : "---"}
+          </Typography>
+        </Box>
+      ))}
+    </Stack>
+  );
 }
