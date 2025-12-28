@@ -83,9 +83,16 @@ export default function ConverterCard() {
     <Card sx={{ maxWidth: 420, mx: "auto", mt: 6 }}>
       <CardContent>
         <Stack spacing={2}>
-          <Typography variant="h6">
-            Currency Converter
-          </Typography>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <img
+              src="/icon.svg"
+              alt="Currency Converter Icon"
+              width={28}
+              height={28}
+              style={{ display: "inline-block" }}
+            />
+            <Typography variant="h6">Currency Converter</Typography>
+          </Stack>
 
           <CurrencySelect
             label="From Currency"
