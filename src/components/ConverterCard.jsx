@@ -80,18 +80,22 @@ export default function ConverterCard() {
   }, [fromCurrency, toCurrencies]);
 
   return (
-    <Card sx={{ maxWidth: 420, mx: "auto", mt: 6 }}>
-      <CardContent>
-        <Stack spacing={2}>
+    <Card
+      elevation={0}
+      sx={{
+        maxWidth: 720,
+        mx: "auto",
+        mt: { xs: 2, sm: 4 },
+        borderRadius: 0,
+        backgroundColor: "transparent"
+      }}>
+      <CardContent sx={{ px: { xs: 2, sm: 3 } }}>
+        <Stack spacing={2.5}>
           <Stack direction="row" alignItems="center" spacing={1}>
-            <img
-              src="/icon.svg"
-              alt="Currency Converter Icon"
-              width={28}
-              height={28}
-              style={{ display: "inline-block" }}
-            />
-            <Typography variant="h6">Currency Converter</Typography>
+            <img src="/icon.svg" alt="Currency Converter Icon" width={28} />
+            <Typography variant="h6" fontWeight={600}>
+              Currency Converter
+            </Typography>
           </Stack>
 
           <CurrencySelect

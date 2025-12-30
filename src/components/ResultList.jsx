@@ -1,5 +1,10 @@
 import { Stack, Typography, Box } from "@mui/material";
 
+const formatter = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
+
 export default function ResultList({
   amount,
   toCurrencies,
@@ -17,11 +22,14 @@ export default function ResultList({
           key={code}
           display="flex"
           justifyContent="space-between"
+          py={1}
+          borderBottom="1px solid"
+          borderColor="divider"
         >
           <Typography fontWeight={500}>{code}</Typography>
-          <Typography>
+          <Typography fontWeight={600}>
             {rates[code]
-              ? (amount * rates[code]).toFixed(2)
+              ? formatter.format(amount * rates[code])
               : "---"}
           </Typography>
         </Box>

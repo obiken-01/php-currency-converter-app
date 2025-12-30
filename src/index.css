@@ -1,10 +1,7 @@
 body {
   font-family: Inter, system-ui, sans-serif;
-  background: #f5f7fa;
-  min-height: 90vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  background: #f9fafb;
+  margin: 0;
 }
 
 .card {
