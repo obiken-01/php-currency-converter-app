@@ -13,9 +13,9 @@ import ResultList from "./ResultList";
 
 export default function ConverterCard() {
   const [currencies, setCurrencies] = useState({});
-  const [fromCurrency, setFromCurrency] = useState("PHP");
+  const [fromCurrency, setFromCurrency] = useState("USD");
   const [amount, setAmount] = useState(1000);
-  const [toCurrencies, setToCurrencies] = useState(["USD"]);
+  const [toCurrencies, setToCurrencies] = useState(["PHP"]);
   const [rates, setRates] = useState({});
   const [loading, setLoading] = useState(false);
 
@@ -29,10 +29,10 @@ export default function ConverterCard() {
     fetchCurrencies();
   }, []);
 
-  // Ensure PHP default
+  // Ensure USD default
   useEffect(() => {
-    if (currencies["PHP"]) {
-      setFromCurrency("PHP");
+    if (currencies["USD"]) {
+      setFromCurrency("USD");
     }
   }, [currencies]);
 
