@@ -1,0 +1,75 @@
+{
+  "baseTimezone": "PH",
+  "timezones": [
+    {
+      "id": "PH",
+      "label": "Philippines",
+      "gmtOffset": 8,
+      "sunrise": "06:00",
+      "sunset": "18:00"
+    },
+    {
+      "id": "SG",
+      "label": "Singapore",
+      "gmtOffset": 8,
+      "sunrise": "06:10",
+      "sunset": "18:50"
+    },
+    {
+      "id": "JP",
+      "label": "Tokyo, Japan",
+      "gmtOffset": 9,
+      "sunrise": "05:00",
+      "sunset": "18:30"
+    },
+    {
+      "id": "KR",
+      "label": "Seoul, South Korea",
+      "gmtOffset": 9,
+      "sunrise": "05:30",
+      "sunset": "19:10"
+    },
+    {
+      "id": "AU_SYD",
+      "label": "Sydney, Australia",
+      "gmtOffset": 10,
+      "sunrise": "05:40",
+      "sunset": "19:30"
+    },
+    {
+      "id": "IN",
+      "label": "India",
+      "gmtOffset": 5.5,
+      "sunrise": "06:00",
+      "sunset": "18:00"
+    },
+    {
+      "id": "AE",
+      "label": "Dubai, UAE",
+      "gmtOffset": 4,
+      "sunrise": "05:45",
+      "sunset": "18:45"
+    },
+    {
+      "id": "UK",
+      "label": "London, UK",
+      "gmtOffset": 0,
+      "sunrise": "06:30",
+      "sunset": "18:00"
+    },
+    {
+      "id": "US_NY",
+      "label": "New York, USA",
+      "gmtOffset": -5,
+      "sunrise": "06:30",
+      "sunset": "17:00"
+    },
+    {
+      "id": "US_CA",
+      "label": "Los Angeles, USA",
+      "gmtOffset": -8,
+      "sunrise": "06:45",
+      "sunset": "17:15"
+    }
+  ]
+}
