@@ -70,6 +70,13 @@
       "gmtOffset": -8,
       "sunrise": "06:45",
       "sunset": "17:15"
+    },
+    {
+      "id": "US_HI",
+      "label": "Honolulu, USA",
+      "gmtOffset": -10,
+      "sunrise": "05:55",
+      "sunset": "18:15"
     }
   ]
 }
