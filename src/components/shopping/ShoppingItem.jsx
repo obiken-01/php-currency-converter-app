@@ -1,4 +1,4 @@
-import { Checkbox, TextField, IconButton, Stack } from "@mui/material";
+import { Box, Checkbox, IconButton, Stack, TextField } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 
 export default function ShoppingItem({ item, onChange, onDelete }) {
@@ -7,64 +7,70 @@ export default function ShoppingItem({ item, onChange, onDelete }) {
   }
 
   return (
-    <Stack
-      direction="row"
-      alignItems="center"
-      spacing={1}
-      flexWrap="wrap"
-      rowGap={1}
-    >
-      <Checkbox
-        checked={item.checked}
-        onChange={(e) => handleField("checked", e.target.checked)}
-        size="small"
-        sx={{ p: 0.5 }}
-      />
+    <Stack spacing={0.75}>
+      {/* Row 1: Checkbox · Name · Delete */}
+      <Stack direction="row" alignItems="center" spacing={1}>
+        <Checkbox
+          checked={item.checked}
+          onChange={(e) => handleField("checked", e.target.checked)}
+          size="small"
+          sx={{ p: 0.5, flexShrink: 0 }}
+        />
 
-      <TextField
-        size="small"
-        value={item.name}
-        onChange={(e) => handleField("name", e.target.value)}
-        placeholder="Item name"
-        sx={{
-          flexGrow: 1,
-          minWidth: 120,
-          "& input": {
-            textDecoration: item.checked ? "line-through" : "none",
-            color: item.checked ? "text.disabled" : "text.primary"
-          }
-        }}
-      />
+        <TextField
+          size="small"
+          value={item.name}
+          onChange={(e) => handleField("name", e.target.value)}
+          placeholder="Item name"
+          fullWidth
+          sx={{
+            "& input": {
+              textDecoration: item.checked ? "line-through" : "none",
+              color: item.checked ? "text.disabled" : "text.primary"
+            }
+          }}
+        />
 
-      <TextField
-        size="small"
-        type="number"
-        value={item.quantity}
-        onChange={(e) => handleField("quantity", Number(e.target.value))}
-        inputProps={{ min: 0, step: 0.5 }}
-        placeholder="Qty"
-        sx={{ width: 72 }}
-      />
+        <IconButton
+          size="small"
+          onClick={onDelete}
+          color="error"
+          sx={{ p: 0.5, flexShrink: 0 }}
+        >
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      </Stack>
 
-      <TextField
-        size="small"
-        value={item.unit ?? ""}
-        onChange={(e) => handleField("unit", e.target.value || null)}
-        placeholder="Unit"
-        sx={{ width: 80 }}
-      />
+      {/* Row 2: Qty · Unit · Notes (indented to align under name) */}
+      <Box sx={{ pl: "44px", pr: "36px" }}>
+        <Stack direction="row" spacing={1}>
+          <TextField
+            size="small"
+            type="number"
+            value={item.quantity}
+            onChange={(e) => handleField("quantity", Number(e.target.value))}
+            inputProps={{ min: 0, step: 0.5 }}
+            placeholder="Qty"
+            sx={{ width: 72, flexShrink: 0 }}
+          />
 
-      <TextField
-        size="small"
-        value={item.notes ?? ""}
-        onChange={(e) => handleField("notes", e.target.value || null)}
-        placeholder="Notes"
-        sx={{ flexGrow: 1, minWidth: 80 }}
-      />
+          <TextField
+            size="small"
+            value={item.unit ?? ""}
+            onChange={(e) => handleField("unit", e.target.value || null)}
+            placeholder="Unit"
+            sx={{ width: 80, flexShrink: 0 }}
+          />
 
-      <IconButton size="small" onClick={onDelete} color="error" sx={{ p: 0.5 }}>
-        <DeleteIcon fontSize="small" />
-      </IconButton>
+          <TextField
+            size="small"
+            value={item.notes ?? ""}
+            onChange={(e) => handleField("notes", e.target.value || null)}
+            placeholder="Notes"
+            fullWidth
+          />
+        </Stack>
+      </Box>
     </Stack>
   );
 }
