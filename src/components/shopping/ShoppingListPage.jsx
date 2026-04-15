@@ -18,7 +18,7 @@ import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import ShoppingItem from "./ShoppingItem";
 
 const API_URL =
-  "https://ralphy-production.up.railway.app/api/shopping-list/parse";
+  "https://ralph-portfolio-production.up.railway.app/api/shopping-list/parse";
 const API_KEY = import.meta.env.VITE_SHOPPING_API_KEY ?? "";
 const STORAGE_KEY = "ralphy-shopping-list";
 
