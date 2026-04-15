@@ -17,6 +17,10 @@ export default function TopMenu({ darkMode, onToggleDarkMode }) {
         Time
       </Button>
 
+      <Button component={NavLink} to="/shopping">
+        Shopping
+      </Button>
+
       <Stack flexGrow={1} />
 
       <Switch checked={darkMode} onChange={onToggleDarkMode} />
