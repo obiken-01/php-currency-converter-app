@@ -7,7 +7,18 @@ export default function ShoppingItem({ item, onChange, onDelete }) {
   }
 
   return (
-    <Stack spacing={0.75}>
+    <Stack
+      spacing={0.75}
+      sx={{
+        border: "1px solid",
+        borderColor: item.checked ? "divider" : "primary.main",
+        borderRadius: 2,
+        px: 1.5,
+        py: 1,
+        opacity: item.checked ? 0.5 : 1,
+        transition: "opacity 0.2s, border-color 0.2s"
+      }}
+    >
       {/* Row 1: Checkbox · Name · Delete */}
       <Stack direction="row" alignItems="center" spacing={1}>
         <Checkbox
@@ -42,7 +53,7 @@ export default function ShoppingItem({ item, onChange, onDelete }) {
       </Stack>
 
       {/* Row 2: Qty · Unit · Notes (indented to align under name) */}
-      <Box sx={{ pl: "44px", pr: "36px" }}>
+      <Box sx={{ pl: "36px" }}>
         <Stack direction="row" spacing={1}>
           <TextField
             size="small"
