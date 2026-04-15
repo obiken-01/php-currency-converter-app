@@ -6,6 +6,7 @@ import "./App.css";
 
 import ConverterCard from "./components/currency/ConverterCard";
 import TimePage from "./components/time/TimePage";
+import ShoppingListPage from "./components/shopping/ShoppingListPage";
 import TopMenu from "./components/common/TopMenu";
 import Footer from "./components/Footer";
 
@@ -38,6 +39,7 @@ function App() {
               <Route path="/" element={<Navigate to="/currency" replace />} />
               <Route path="/currency" element={<ConverterCard />} />
               <Route path="/time" element={<TimePage />} />
+              <Route path="/shopping" element={<ShoppingListPage />} />
             </Routes>
           </Box>
 
