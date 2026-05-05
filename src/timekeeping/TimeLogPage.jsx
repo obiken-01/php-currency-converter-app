@@ -28,10 +28,16 @@ import FilterListIcon from "@mui/icons-material/FilterList";
 import SaveIcon from "@mui/icons-material/Save";
 import tkApi from "./api/timekeepingApi";
 
+const toLocalDateTimeString = () => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 16);
+};
+
 const DEFAULT_FORM = {
   taskDescription: "",
   duration: "",
-  loggedAt: new Date().toISOString().slice(0, 16),
+  loggedAt: toLocalDateTimeString(),
 };
 
 const DEFAULT_FILTERS = {
