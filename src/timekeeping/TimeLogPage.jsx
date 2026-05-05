@@ -238,14 +238,17 @@ export default function TimeLogPage() {
             alignItems={{ sm: "flex-end" }}
           >
             <TextField
-              label="Task Description *"
-              value={form.taskDescription}
-              onChange={e => setForm({ ...form, taskDescription: e.target.value })}
-              placeholder="e.g. Daily standup"
-              size="small"
-              sx={{ flex: 3 }}
-              required
-            />
+                label="Task Description *"
+                value={form.taskDescription}
+                onChange={e => setForm({ ...form, taskDescription: e.target.value })}
+                placeholder="e.g. Daily standup"
+                size="small"
+                multiline
+                minRows={1}
+                maxRows={4}
+                sx={{ flex: 3 }}
+                required
+                />
             <TextField
               label="Duration (hrs) *"
               type="number"
@@ -329,7 +332,7 @@ export default function TimeLogPage() {
               size="small"
               sx={{ flex: 2, minWidth: 180 }}
             />
-            <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+            <Stack direction="row" spacing={2} sx={{ flexShrink: 0 }}>
               <Button variant="contained" onClick={handleApplyFilters}>
                 Apply
               </Button>
@@ -469,7 +472,7 @@ export default function TimeLogPage() {
                             </TableCell>
                             <TableCell align="right">
                               <Typography variant="body2">
-                                {log.duration}
+                                {Number(log.duration).toFixed(2).replace(/\.00$/, '')}
                               </Typography>
                             </TableCell>
                             <TableCell align="right">
