@@ -122,7 +122,7 @@ export default function TimeLogPage() {
       });
       setForm({
         ...DEFAULT_FORM,
-        loggedAt: new Date().toISOString().slice(0, 16),
+        loggedAt: toLocalDateTimeString(),
       });
       fetchLogs();
     } catch (err) {
