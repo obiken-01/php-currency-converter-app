@@ -62,3 +62,9 @@
 .sticky-header {
   border-bottom: 1px solid #eee;
 }
+
+@media (max-width: 600px) {
+  body {
+    padding-bottom: 56px;
+  }
+}
