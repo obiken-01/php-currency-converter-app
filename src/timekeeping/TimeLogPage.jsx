@@ -81,8 +81,8 @@ export default function TimeLogPage() {
         pageSize: f.pageSize,
         sortBy:   f.sortBy,
         sortDir:  f.sortDir,
-        ...(f.from   && { from:   `${f.from}T00:00:00` }),
-        ...(f.to     && { to:     `${f.to}T23:59:59` }),
+        ...(f.from   && { from:   f.from }),
+        ...(f.to     && { to:     f.to }),
         ...(f.search && { search: f.search }),
       };
       const res = await tkApi.get("/logs", { params });
