@@ -7,6 +7,7 @@ import {
 import tasksApi from "../api/tasksApi";
 import { qk, qkPrefix } from "../constants/queryKeys";
 import { toQueryParams } from "../context/taskFilterContext";
+import { useToast } from "../context/toastContext";
 
 export function useWorkItems(filters) {
   const params = toQueryParams(filters);
@@ -65,8 +66,11 @@ export function useDeleteWorkItem() {
  */
 export function useSetWorkItemStatus() {
   const qc = useQueryClient();
+  const toast = useToast();
+
   return useMutation({
     mutationFn: ({ publicId, status }) => tasksApi.setStatus(publicId, status),
+
     onMutate: async ({ publicId, status }) => {
       const key = qk.task(publicId);
       await qc.cancelQueries({ queryKey: key });
@@ -74,9 +78,25 @@ export function useSetWorkItemStatus() {
       if (previous) qc.setQueryData(key, { ...previous, status });
       return { previous, key };
     },
-    onError: (_err, _vars, ctx) => {
+
+    // A silent rollback here is indistinguishable from the save doing
+    // nothing. RowVersion (Postgres xmin) changes on every write, so a modal
+    // left open while the item was touched elsewhere sends a stale token and
+    // gets a 409 -- which used to look exactly like a broken save.
+    //
+    // This is deliberately the opposite of the board, where the user watches
+    // the card snap back and a toast would only be noise.
+    onError: async (err, { publicId }, ctx) => {
       if (ctx?.previous) qc.setQueryData(ctx.key, ctx.previous);
+
+      if (err?.response?.status === 409) {
+        await qc.invalidateQueries({ queryKey: qk.task(publicId) });
+        toast.warn("This item changed elsewhere — reloaded. Try again.");
+      } else {
+        toast.error("Could not update status.");
+      }
     },
+
     onSettled: (_data, _err, { publicId }) => invalidateAll(qc, publicId),
   });
 }
