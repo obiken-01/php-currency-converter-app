@@ -18,6 +18,7 @@ import ToastProvider from "./work/context/ToastProvider";
 import WorkLoginPage from "./work/pages/WorkLoginPage";
 import WorkLayout from "./work/components/WorkLayout";
 import TimeLogPage from "./work/pages/TimeLogPage";
+import TasksPage from "./work/pages/TasksPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -75,7 +76,8 @@ function App() {
               <Route path="/work" element={<WorkLayout />}>
                 {/* Dashboard takes the index in F7; the log list until then. */}
                 <Route index       element={<TimeLogPage />} />
-                <Route path="logs" element={<TimeLogPage />} />
+                <Route path="logs"  element={<TimeLogPage />} />
+                <Route path="tasks" element={<TasksPage />} />
               </Route>
 
             </Routes>
