@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { ThemeProvider, createTheme, CssBaseline, Box } from "@mui/material";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
 import "./App.css";
 
@@ -10,10 +12,27 @@ import ShoppingListPage from "./components/shopping/ShoppingListPage";
 import TopMenu from "./components/common/TopMenu";
 import Footer from "./components/Footer";
 
-// Timekeeping
-import TimekeepingLoginPage from "./timekeeping/TimekeepingLoginPage";
-import TimekeepingLayout from "./timekeeping/TimekeepingLayout";
-import TimeLogPage from "./timekeeping/TimeLogPage";
+import ToastProvider from "./work/context/ToastProvider";
+
+// Work
+import WorkLoginPage from "./work/pages/WorkLoginPage";
+import WorkLayout from "./work/components/WorkLayout";
+import TimeLogPage from "./work/pages/TimeLogPage";
+import TasksPage from "./work/pages/TasksPage";
+import ProjectsPage from "./work/pages/ProjectsPage";
+import ProjectDetailPage from "./work/pages/ProjectDetailPage";
+import TokensPage from "./work/pages/TokensPage";
+import WorkDashboardPage from "./work/pages/WorkDashboardPage";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 function App() {
   const [darkMode, setDarkMode] = useState(false);
@@ -28,70 +47,51 @@ function App() {
     [darkMode]
   );
 
+  // The four site tools share this chrome; /work brings its own.
+  const withChrome = (content) => (
+    <Box minHeight="100vh" display="flex" flexDirection="column">
+      <TopMenu
+        darkMode={darkMode}
+        onToggleDarkMode={() => setDarkMode(v => !v)}
+      />
+      <Box flexGrow={1}>{content}</Box>
+      <Footer />
+    </Box>
+  );
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
 
-      <BrowserRouter>
-        <Routes>
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>
+          <BrowserRouter>
+            <Routes>
 
-          {/* ── Existing tools (with TopMenu + Footer) ── */}
-          <Route path="/" element={
-            <Box minHeight="100vh" display="flex" flexDirection="column">
-              <TopMenu
-                darkMode={darkMode}
-                onToggleDarkMode={() => setDarkMode(v => !v)}
-              />
-              <Box flexGrow={1}>
-                <Navigate to="/currency" replace />
-              </Box>
-              <Footer />
-            </Box>
-          } />
+              {/* ── Existing tools (with TopMenu + Footer) ── */}
+              <Route path="/"         element={withChrome(<Navigate to="/currency" replace />)} />
+              <Route path="/currency" element={withChrome(<ConverterCard />)} />
+              <Route path="/time"     element={withChrome(<TimePage />)} />
+              <Route path="/shopping" element={withChrome(<ShoppingListPage />)} />
 
-          <Route path="/currency" element={
-            <Box minHeight="100vh" display="flex" flexDirection="column">
-              <TopMenu
-                darkMode={darkMode}
-                onToggleDarkMode={() => setDarkMode(v => !v)}
-              />
-              <Box flexGrow={1}><ConverterCard /></Box>
-              <Footer />
-            </Box>
-          } />
+              {/* ── Work (own layout, no site TopMenu/Footer) ── */}
+              <Route path="/work/login" element={<WorkLoginPage />} />
 
-          <Route path="/time" element={
-            <Box minHeight="100vh" display="flex" flexDirection="column">
-              <TopMenu
-                darkMode={darkMode}
-                onToggleDarkMode={() => setDarkMode(v => !v)}
-              />
-              <Box flexGrow={1}><TimePage /></Box>
-              <Footer />
-            </Box>
-          } />
+              <Route path="/work" element={<WorkLayout />}>
+                <Route index           element={<WorkDashboardPage />} />
+                <Route path="logs"     element={<TimeLogPage />} />
+                <Route path="tasks"    element={<TasksPage />} />
+                <Route path="projects" element={<ProjectsPage />} />
+                <Route path="projects/:publicId" element={<ProjectDetailPage />} />
+                <Route path="timeline" element={<ProjectsPage timelineMode />} />
+                <Route path="tokens"   element={<TokensPage />} />
+              </Route>
 
-          <Route path="/shopping" element={
-            <Box minHeight="100vh" display="flex" flexDirection="column">
-              <TopMenu
-                darkMode={darkMode}
-                onToggleDarkMode={() => setDarkMode(v => !v)}
-              />
-              <Box flexGrow={1}><ShoppingListPage /></Box>
-              <Footer />
-            </Box>
-          } />
-
-          {/* ── Timekeeping (own layout, no TopMenu/Footer) ── */}
-          <Route path="/timekeeping/login"
-                 element={<TimekeepingLoginPage />} />
-
-          <Route path="/timekeeping" element={<TimekeepingLayout />}>
-            <Route index element={<TimeLogPage />} />
-          </Route>
-
-        </Routes>
-      </BrowserRouter>
+            </Routes>
+          </BrowserRouter>
+        </ToastProvider>
+        <ReactQueryDevtools initialIsOpen={false} />
+      </QueryClientProvider>
     </ThemeProvider>
   );
 }

@@ -12,7 +12,7 @@ const navItems = [
   { label: "Currency",    path: "/currency",    icon: <CurrencyExchangeIcon /> },
   { label: "Time",        path: "/time",         icon: <AccessTimeIcon /> },
   { label: "Shopping",    path: "/shopping",     icon: <ShoppingCartIcon /> },
-  { label: "Timekeeping", path: "/timekeeping",  icon: <TimerIcon /> },
+  { label: "Work",        path: "/work",         icon: <TimerIcon /> },
 ];
 
 export default function TopMenu({ darkMode, onToggleDarkMode }) {
