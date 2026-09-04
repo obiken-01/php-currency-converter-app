@@ -90,6 +90,9 @@ export function useMoveWorkItem(projectId, assignee) {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: key });
       qc.invalidateQueries({ queryKey: qkPrefix.tasks });
+      // The dashboard's "In progress" shortlist otherwise keeps showing a
+      // card that has just been dragged to Done.
+      qc.invalidateQueries({ queryKey: qk.dashboard() });
     },
   });
 }
