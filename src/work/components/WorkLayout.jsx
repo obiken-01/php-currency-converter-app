@@ -7,17 +7,31 @@ import {
   Box,
   Button,
   CircularProgress,
+  IconButton,
   Stack,
   Toolbar,
+  Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
-import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import LogoutIcon from "@mui/icons-material/Logout";
+import TimerIcon from "@mui/icons-material/Timer";
+import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import { clearTokens, getAccessToken } from "../api/workApi";
 import authApi from "../api/authApi";
+import WorkSubNav from "./WorkSubNav";
+import WorkBottomNav from "./WorkBottomNav";
 
+/**
+ * Guards everything nested under /work. The module keeps its own AppBar
+ * rather than the site TopMenu — WorkSubNav slots underneath it.
+ */
 export default function WorkLayout() {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [user, setUser] = useState(null);
   const [checking, setChecking] = useState(true);
 
@@ -68,38 +82,75 @@ export default function WorkLayout() {
     <Box sx={{ minHeight: "100vh" }}>
 
       {/* Top bar */}
-      <AppBar position="static" elevation={0} variant="outlined">
-        <Toolbar>
-          <Stack direction="row" alignItems="center" spacing={1} flexGrow={1}>
-            <AccessTimeIcon fontSize="small" />
+      <AppBar position="static" elevation={0} variant="outlined" color="inherit">
+        <Toolbar variant="dense">
+          {/* Mobile swaps the site bottom nav for the module one, so this is
+              the only way back out to the other tools. */}
+          <Tooltip title="Back to tools">
+            <IconButton
+              edge="start"
+              size="small"
+              onClick={() => navigate("/currency")}
+              sx={{ mr: 1 }}
+            >
+              <ArrowBackIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1}
+            flexGrow={1}
+            sx={{ cursor: "pointer" }}
+            onClick={() => navigate("/work")}
+          >
+            <TimerIcon fontSize="small" />
             <Typography variant="subtitle1" fontWeight={700}>
               Work
             </Typography>
           </Stack>
 
-          <Stack direction="row" alignItems="center" spacing={2}>
-            {user && (
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Tooltip title="Access tokens">
+              <IconButton size="small" onClick={() => navigate("/work/tokens")}>
+                <VpnKeyIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+
+            {user && !isMobile && (
               <Typography variant="body2" color="text.secondary">
                 {user.username}
               </Typography>
             )}
+
             <Button
               size="small"
               color="inherit"
               startIcon={<LogoutIcon fontSize="small" />}
               onClick={handleLogout}
             >
-              Logout
+              {isMobile ? "" : "Logout"}
             </Button>
           </Stack>
         </Toolbar>
+
+        {!isMobile && <WorkSubNav />}
       </AppBar>
 
       {/* Page content */}
-      <Box sx={{ maxWidth: 900, mx: "auto", p: { xs: 2, sm: 3 } }}>
+      <Box
+        sx={{
+          maxWidth: 1400,
+          mx: "auto",
+          p: { xs: 2, sm: 3 },
+          pb: isMobile ? 9 : 3,
+        }}
+      >
         <Outlet />
       </Box>
 
+      {isMobile && <WorkBottomNav />}
     </Box>
   );
 }
