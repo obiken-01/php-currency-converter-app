@@ -27,6 +27,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import MoreTimeIcon from "@mui/icons-material/MoreTime";
 import CheckIcon from "@mui/icons-material/Check";
 import { WORK_ITEM_STATUSES, PRIORITIES } from "../../constants/statuses";
+import { LINKED_LOGS_ENABLED } from "../../constants/features";
 import { formatDateTime, formatShortDate } from "../../utils/dates";
 import LabelChip from "../common/LabelChip";
 import AssigneeAvatar from "../common/AssigneeAvatar";
@@ -59,8 +60,11 @@ function MetaRow({ label, children }) {
   );
 }
 
-/** Linked time logs plus their total -- the point of the whole module. */
-function LinkedLogs({ publicId, onLogTime }) {
+/**
+ * The list and total, gated on LINKED_LOGS_ENABLED. Only mounted when the
+ * flag is on, so the query never fires while the endpoint is missing.
+ */
+function LinkedLogsList({ publicId }) {
   const { data, isPending, isError } = useWorkItemLogs(publicId);
 
   if (isPending) return <Skeleton variant="rounded" height={64} />;
@@ -71,18 +75,10 @@ function LinkedLogs({ publicId, onLogTime }) {
 
   return (
     <Stack spacing={1}>
-      <Stack direction="row" alignItems="center" spacing={1}>
-        <Typography variant="subtitle2" fontWeight={700} flexGrow={1}>
-          Time logs
-        </Typography>
+      <Stack direction="row" justifyContent="flex-end">
         <Typography variant="caption" color="text.secondary">
           {total.toFixed(2)} h total
         </Typography>
-        {onLogTime && (
-          <Button size="small" startIcon={<MoreTimeIcon fontSize="small" />} onClick={onLogTime}>
-            Log time
-          </Button>
-        )}
       </Stack>
 
       {logs.length === 0 ? (
@@ -329,10 +325,26 @@ function TaskDetailBody({ publicId, onClose, onLogTime, onRequestEdit }) {
 
             <Divider />
 
-            <LinkedLogs
-              publicId={publicId}
-              onLogTime={onLogTime ? () => onLogTime(task) : undefined}
-            />
+            {/* The "Log time" button stays regardless -- only the list is
+                gated, so gating does not remove the way to record time. */}
+            <Stack spacing={1}>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography variant="subtitle2" fontWeight={700} flexGrow={1}>
+                  Time logs
+                </Typography>
+                {onLogTime && (
+                  <Button
+                    size="small"
+                    startIcon={<MoreTimeIcon fontSize="small" />}
+                    onClick={() => onLogTime(task)}
+                  >
+                    Log time
+                  </Button>
+                )}
+              </Stack>
+
+              {LINKED_LOGS_ENABLED && <LinkedLogsList publicId={publicId} />}
+            </Stack>
 
             <Divider />
 

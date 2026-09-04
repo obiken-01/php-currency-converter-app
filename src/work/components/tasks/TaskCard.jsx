@@ -1,5 +1,4 @@
 import { Box, Card, IconButton, Stack, Tooltip, Typography } from "@mui/material";
-import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import MoreTimeIcon from "@mui/icons-material/MoreTime";
 import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
 import { getPriority } from "../../constants/statuses";
@@ -27,7 +26,6 @@ const clamp = (lines) => ({
  * @param {function} onClick          (publicId) => void -- opens the detail modal
  * @param {boolean}  compact          true on the Kanban board (hides the project chip)
  * @param {boolean}  isDragging       board drag state -> reduced elevation
- * @param {object}   dragHandleProps  spread onto the drag affordance
  * @param {function} [onLogTime]      (task) => void -- opens a prefilled time log
  */
 export default function TaskCard({
@@ -35,7 +33,6 @@ export default function TaskCard({
   onClick,
   compact = false,
   isDragging = false,
-  dragHandleProps,
   onLogTime,
 }) {
   if (!task) return null;
@@ -78,12 +75,16 @@ export default function TaskCard({
             {task.title}
           </Typography>
 
-          <Stack
-            direction="row"
-            className="task-card-actions"
-            sx={{ opacity: 0, transition: "opacity 120ms", flexShrink: 0 }}
-          >
-            {onLogTime && (
+          {onLogTime && (
+            <Stack
+              direction="row"
+              className="task-card-actions"
+              // On the board the whole card carries the drag listeners, so a
+              // press here would start a drag. stopPropagation on click is too
+              // late — the sensor activates on pointerdown.
+              onPointerDown={(e) => e.stopPropagation()}
+              sx={{ opacity: 0, transition: "opacity 120ms", flexShrink: 0 }}
+            >
               <Tooltip title="Log time against this task">
                 <IconButton
                   size="small"
@@ -92,23 +93,8 @@ export default function TaskCard({
                   <MoreTimeIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </Tooltip>
-            )}
-            {dragHandleProps && (
-              <Box
-                {...dragHandleProps}
-                onClick={(e) => e.stopPropagation()}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  cursor: "grab",
-                  color: "text.disabled",
-                  touchAction: "none",
-                }}
-              >
-                <DragIndicatorIcon sx={{ fontSize: 16 }} />
-              </Box>
-            )}
-          </Stack>
+            </Stack>
+          )}
         </Stack>
 
         {/* Summary */}

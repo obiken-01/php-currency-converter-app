@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Alert,
   Box,
@@ -7,21 +7,14 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import {
-  DndContext,
-  DragOverlay,
-  KeyboardSensor,
-  PointerSensor,
-  closestCorners,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { DndContext, DragOverlay, closestCorners } from "@dnd-kit/core";
 import KanbanColumn from "./KanbanColumn";
-import { COLUMN_WIDTH } from "../../../constants/board";
 import KanbanMobileTabs from "./KanbanMobileTabs";
 import TaskCard from "../TaskCard";
+import { useBoardSensors } from "./sensors";
+import { COLUMN_WIDTH } from "../../../constants/board";
 import { useBoard, useMoveWorkItem, normaliseColumns } from "../../../hooks/useBoard";
+import { moveCardBetweenColumns, resolveDrop } from "../../../utils/boardDrag";
 
 /**
  * @param {string|null} projectId   null = all visible items
@@ -38,55 +31,51 @@ export default function KanbanBoard({
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const sensors = useBoardSensors();
 
   const { data, isPending, isError, error } = useBoard(projectId, assignee);
   const move = useMoveWorkItem(projectId, assignee);
 
+  const serverColumns = normaliseColumns(data);
+
+  // A mirror of the columns that only exists while a drag is in flight, so
+  // cards visibly move between columns mid-drag. Null the rest of the time,
+  // which resyncs to server data without an effect — the react-hooks rules
+  // in this project forbid setState in an effect body.
+  const [dragColumns, setDragColumns] = useState(null);
   const [activeTask, setActiveTask] = useState(null);
 
-  const columns = useMemo(() => normaliseColumns(data), [data]);
+  const columns = dragColumns ?? serverColumns;
 
-  const sensors = useSensors(
-    // A small distance threshold lets a tap still open the card.
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  const findCard = (publicId) => {
-    for (const column of columns) {
-      const card = column.items.find((item) => item.publicId === publicId);
-      if (card) return card;
-    }
-    return null;
+  const handleDragStart = ({ active }) => {
+    setActiveTask(active.data.current?.task ?? null);
+    setDragColumns(serverColumns);
   };
 
-  const handleDragStart = ({ active }) => setActiveTask(findCard(active.id));
+  // Moves the card between columns during the drag so the preview is accurate.
+  const handleDragOver = ({ active, over }) => {
+    if (!over) return;
+    setDragColumns((prev) =>
+      moveCardBetweenColumns(prev ?? serverColumns, active.id, over.id)
+    );
+  };
 
   const handleDragEnd = ({ active, over }) => {
     setActiveTask(null);
-    if (!over) return;
 
-    const overData = over.data.current;
-    const targetStatus =
-      overData?.type === "column" ? overData.status : overData?.status;
-    if (!targetStatus) return;
+    // resolveDrop returns null for a drop outside any column, on an unknown
+    // target, or back where the card started -- all of which fire no request.
+    const drop = resolveDrop(columns, serverColumns, active.id, over?.id);
 
-    const targetColumn = columns.find((c) => c.status === targetStatus);
-    if (!targetColumn) return;
+    setDragColumns(null);
+    if (!drop) return;
 
-    const currentIndex = targetColumn.items.findIndex((i) => i.publicId === active.id);
-    const overIndex =
-      overData?.type === "column"
-        ? targetColumn.items.length
-        : targetColumn.items.findIndex((i) => i.publicId === over.id);
+    move.mutate({ publicId: active.id, ...drop });
+  };
 
-    const sourceStatus = active.data.current?.status;
-    const newIndex = overIndex === -1 ? targetColumn.items.length : overIndex;
-
-    // Nothing actually changed.
-    if (sourceStatus === targetStatus && currentIndex === newIndex) return;
-
-    move.mutate({ publicId: active.id, status: targetStatus, newIndex });
+  const handleDragCancel = () => {
+    setActiveTask(null);
+    setDragColumns(null);
   };
 
   if (isPending) {
@@ -111,17 +100,10 @@ export default function KanbanBoard({
     return <Alert severity="info">The board has no columns yet.</Alert>;
   }
 
-  const dndProps = {
-    sensors,
-    collisionDetection: closestCorners,
-    onDragStart: handleDragStart,
-    onDragEnd: handleDragEnd,
-    onDragCancel: () => setActiveTask(null),
-  };
-
   // A six-column board is unusable at 380px, so mobile gets one column at a
-  // time. Cross-column drag is impossible there -- the status dropdown in
-  // TaskDetailModal is the move mechanism instead.
+  // time. There is nowhere to drag across to; reordering within the visible
+  // column still works, and cross-column moves go through the status dropdown
+  // in TaskDetailModal.
   if (isMobile) {
     return (
       <KanbanMobileTabs
@@ -129,18 +111,29 @@ export default function KanbanBoard({
         onOpenTask={onOpenTask}
         onAddCard={onAddCard}
         onLogTime={onLogTime}
+        onReorder={(status, publicId, newIndex) =>
+          move.mutate({ publicId, status, newIndex })
+        }
       />
     );
   }
 
   return (
-    <DndContext {...dndProps}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}   // best fit for column-based boards
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
       <Box
         sx={{
           display: "flex",
           gap: 2,
           overflowX: "auto",
-          pb: 1,
+          pb: 2,
+          alignItems: "flex-start",
           height: "calc(100vh - 260px)",
           minHeight: 380,
         }}
@@ -156,10 +149,12 @@ export default function KanbanBoard({
         ))}
       </Box>
 
-      <DragOverlay>
+      <DragOverlay
+        dropAnimation={{ duration: 180, easing: "cubic-bezier(0.18, 0.67, 0.6, 1.22)" }}
+      >
         {activeTask && (
-          <Box sx={{ width: COLUMN_WIDTH.md - 16, cursor: "grabbing" }}>
-            <TaskCard task={activeTask} compact />
+          <Box sx={{ width: COLUMN_WIDTH.md - 16, transform: "rotate(2deg)", cursor: "grabbing" }}>
+            <TaskCard task={activeTask} compact isDragging />
           </Box>
         )}
       </DragOverlay>
