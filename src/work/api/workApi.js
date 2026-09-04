@@ -3,17 +3,34 @@ import axios from "axios";
 const BASE_URL = import.meta.env.VITE_API_URL
   ?? "https://ralph-portfolio-production.up.railway.app/api";
 
-const TK_ACCESS_TOKEN_KEY  = "tk_access_token";
-const TK_REFRESH_TOKEN_KEY = "tk_refresh_token";
+const ACCESS_TOKEN_KEY  = "work_access_token";
+const REFRESH_TOKEN_KEY = "work_refresh_token";
+
+// ── One-time migration from the tk_* keys ────────────────────────
+// Renaming the storage keys would otherwise log you out on next load.
+// Remove this after one release.
+const migrateLegacyTokens = () => {
+  const legacyAccess  = localStorage.getItem("tk_access_token");
+  const legacyRefresh = localStorage.getItem("tk_refresh_token");
+  if (legacyAccess && !localStorage.getItem(ACCESS_TOKEN_KEY)) {
+    localStorage.setItem(ACCESS_TOKEN_KEY, legacyAccess);
+    if (legacyRefresh) localStorage.setItem(REFRESH_TOKEN_KEY, legacyRefresh);
+  }
+  localStorage.removeItem("tk_access_token");
+  localStorage.removeItem("tk_refresh_token");
+};
+migrateLegacyTokens();
 
 // ── Axios instance ───────────────────────────────────────────────
-const tkApi = axios.create({
-  baseURL: `${BASE_URL}/timekeeping`,
+// The module prefix lives here, so every call site uses bare paths
+// ("/logs", "/tasks") — never "/work/tasks".
+const workApi = axios.create({
+  baseURL: `${BASE_URL}/work`,
 });
 
 // ── Request interceptor — attach access token ────────────────────
-tkApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem(TK_ACCESS_TOKEN_KEY);
+workApi.interceptors.request.use((config) => {
+  const token = localStorage.getItem(ACCESS_TOKEN_KEY);
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -35,7 +52,7 @@ function processQueue(error, token = null) {
   failedQueue = [];
 }
 
-tkApi.interceptors.response.use(
+workApi.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
@@ -47,7 +64,7 @@ tkApi.interceptors.response.use(
         })
           .then((token) => {
             originalRequest.headers.Authorization = `Bearer ${token}`;
-            return tkApi(originalRequest);
+            return workApi(originalRequest);
           })
           .catch((err) => Promise.reject(err));
       }
@@ -55,36 +72,36 @@ tkApi.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
 
-      const refreshToken = localStorage.getItem(TK_REFRESH_TOKEN_KEY);
+      const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
 
       if (!refreshToken) {
         clearTokens();
-        window.location.href = "/timekeeping/login";
+        window.location.href = "/work/login";
         return Promise.reject(error);
       }
 
       try {
         const res = await axios.post(
-          `${BASE_URL}/timekeeping/auth/refresh`,
+          `${BASE_URL}/work/auth/refresh`,
           { refreshToken }
         );
 
         const { accessToken, refreshToken: newRefreshToken } =
           res.data.data;
 
-        localStorage.setItem(TK_ACCESS_TOKEN_KEY,  accessToken);
-        localStorage.setItem(TK_REFRESH_TOKEN_KEY, newRefreshToken);
+        localStorage.setItem(ACCESS_TOKEN_KEY,  accessToken);
+        localStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken);
 
-        tkApi.defaults.headers.common.Authorization =
+        workApi.defaults.headers.common.Authorization =
           `Bearer ${accessToken}`;
 
         processQueue(null, accessToken);
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-        return tkApi(originalRequest);
+        return workApi(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
         clearTokens();
-        window.location.href = "/timekeeping/login";
+        window.location.href = "/work/login";
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
@@ -97,17 +114,24 @@ tkApi.interceptors.response.use(
 
 // ── Token helpers ────────────────────────────────────────────────
 export function saveTokens(accessToken, refreshToken) {
-  localStorage.setItem(TK_ACCESS_TOKEN_KEY,  accessToken);
-  localStorage.setItem(TK_REFRESH_TOKEN_KEY, refreshToken);
+  localStorage.setItem(ACCESS_TOKEN_KEY,  accessToken);
+  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 }
 
 export function clearTokens() {
-  localStorage.removeItem(TK_ACCESS_TOKEN_KEY);
-  localStorage.removeItem(TK_REFRESH_TOKEN_KEY);
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
 export function getAccessToken() {
-  return localStorage.getItem(TK_ACCESS_TOKEN_KEY);
+  return localStorage.getItem(ACCESS_TOKEN_KEY);
 }
 
-export default tkApi;
+export function getRefreshToken() {
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+// Every endpoint returns the ApiResponse<T> envelope — res.data.data.
+export const unwrap = (res) => res.data.data;
+
+export default workApi;

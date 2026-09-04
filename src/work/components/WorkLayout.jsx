@@ -1,4 +1,4 @@
-// src/timekeeping/TimekeepingLayout.jsx (ADD)
+// src/work/components/WorkLayout.jsx
 
 import { useEffect, useState } from "react";
 import { useNavigate, Outlet } from "react-router-dom";
@@ -13,9 +13,10 @@ import {
 } from "@mui/material";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import LogoutIcon from "@mui/icons-material/Logout";
-import tkApi, { clearTokens, getAccessToken } from "./api/timekeepingApi";
+import { clearTokens, getAccessToken } from "../api/workApi";
+import authApi from "../api/authApi";
 
-export default function TimekeepingLayout() {
+export default function WorkLayout() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [checking, setChecking] = useState(true);
@@ -23,31 +24,28 @@ export default function TimekeepingLayout() {
   useEffect(() => {
     const token = getAccessToken();
     if (!token) {
-      navigate("/timekeeping/login", { replace: true });
+      navigate("/work/login", { replace: true });
       return;
     }
 
-    tkApi
-      .get("/auth/me")
-      .then((res) => setUser(res.data.data))
+    authApi
+      .me()
+      .then(setUser)
       .catch(() => {
         clearTokens();
-        navigate("/timekeeping/login", { replace: true });
+        navigate("/work/login", { replace: true });
       })
       .finally(() => setChecking(false));
   }, [navigate]);
 
   const handleLogout = async () => {
     try {
-      const refreshToken = localStorage.getItem("tk_refresh_token");
-      if (refreshToken) {
-        await tkApi.post("/auth/revoke", { refreshToken });
-      }
+      await authApi.revoke();
     } catch {
       // ignore revoke errors
     } finally {
       clearTokens();
-      navigate("/timekeeping/login", { replace: true });
+      navigate("/work/login", { replace: true });
     }
   };
 
@@ -75,7 +73,7 @@ export default function TimekeepingLayout() {
           <Stack direction="row" alignItems="center" spacing={1} flexGrow={1}>
             <AccessTimeIcon fontSize="small" />
             <Typography variant="subtitle1" fontWeight={700}>
-              Timekeeping
+              Work
             </Typography>
           </Stack>
 

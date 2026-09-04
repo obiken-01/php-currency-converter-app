@@ -12,10 +12,11 @@ import {
   Typography,
 } from "@mui/material";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
-import tkApi, { saveTokens } from "./api/timekeepingApi";
-import TopMenu from "../components/common/TopMenu";
+import { saveTokens } from "../api/workApi";
+import authApi from "../api/authApi";
+import TopMenu from "../../components/common/TopMenu";
 
-export default function TimekeepingLoginPage() {
+export default function WorkLoginPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState(null);
@@ -28,10 +29,9 @@ export default function TimekeepingLoginPage() {
     setError(null);
 
     try {
-      const res = await tkApi.post("/auth/login", form);
-      const { accessToken, refreshToken } = res.data.data;
+      const { accessToken, refreshToken } = await authApi.login(form);
       saveTokens(accessToken, refreshToken);
-      navigate("/timekeeping");
+      navigate("/work");
     } catch (err) {
       setError(
         err.response?.data?.message ?? "Invalid email or password"
@@ -74,7 +74,7 @@ export default function TimekeepingLoginPage() {
               <AccessTimeIcon sx={{ color: "white" }} />
             </Box>
             <Typography variant="h6" fontWeight={700}>
-              Timekeeping
+              Work
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Sign in to your account

@@ -10,10 +10,10 @@ import ShoppingListPage from "./components/shopping/ShoppingListPage";
 import TopMenu from "./components/common/TopMenu";
 import Footer from "./components/Footer";
 
-// Timekeeping
-import TimekeepingLoginPage from "./timekeeping/TimekeepingLoginPage";
-import TimekeepingLayout from "./timekeeping/TimekeepingLayout";
-import TimeLogPage from "./timekeeping/TimeLogPage";
+// Work
+import WorkLoginPage from "./work/pages/WorkLoginPage";
+import WorkLayout from "./work/components/WorkLayout";
+import TimeLogPage from "./work/pages/TimeLogPage";
 
 function App() {
   const [darkMode, setDarkMode] = useState(false);
@@ -82,11 +82,10 @@ function App() {
             </Box>
           } />
 
-          {/* ── Timekeeping (own layout, no TopMenu/Footer) ── */}
-          <Route path="/timekeeping/login"
-                 element={<TimekeepingLoginPage />} />
+          {/* ── Work (own layout, no site TopMenu/Footer) */}
+          <Route path="/work/login" element={<WorkLoginPage />} />
 
-          <Route path="/timekeeping" element={<TimekeepingLayout />}>
+          <Route path="/work" element={<WorkLayout />}>
             <Route index element={<TimeLogPage />} />
           </Route>
 

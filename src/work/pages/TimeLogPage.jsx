@@ -26,13 +26,8 @@ import EditIcon from "@mui/icons-material/Edit";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import SaveIcon from "@mui/icons-material/Save";
-import tkApi from "./api/timekeepingApi";
-
-const toLocalDateTimeString = () => {
-  const now = new Date();
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  return now.toISOString().slice(0, 16);
-};
+import timeLogsApi from "../api/timeLogsApi";
+import { toLocalDateTimeString } from "../utils/dates";
 
 const DEFAULT_FORM = {
   taskDescription: "",
@@ -85,8 +80,7 @@ export default function TimeLogPage() {
         ...(f.to     && { to:     f.to }),
         ...(f.search && { search: f.search }),
       };
-      const res = await tkApi.get("/logs", { params });
-      const data = res.data.data;
+      const data = await timeLogsApi.query(params);
       setLogs(data.items ?? []);
       setTotalCount(data.totalCount ?? 0);
       setTotalPages(data.totalPages ?? 1);
@@ -115,7 +109,7 @@ export default function TimeLogPage() {
 
     setSubmitting(true);
     try {
-      await tkApi.post("/logs", {
+      await timeLogsApi.create({
         taskDescription: form.taskDescription,
         duration:        Number(form.duration),
         loggedAt:        new Date(form.loggedAt).toISOString(),
@@ -136,7 +130,7 @@ export default function TimeLogPage() {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this time log?")) return;
     try {
-      await tkApi.delete(`/logs/${id}`);
+      await timeLogsApi.remove(id);
       fetchLogs();
     } catch {
       setError("Failed to delete log.");
@@ -155,7 +149,7 @@ export default function TimeLogPage() {
 
   const handleEditSave = async (id) => {
     try {
-      await tkApi.put(`/logs/${id}`, {
+      await timeLogsApi.update(id, {
         taskDescription: editForm.taskDescription,
         duration:        Number(editForm.duration),
         loggedAt:        new Date(editForm.loggedAt).toISOString(),
@@ -197,11 +191,8 @@ export default function TimeLogPage() {
         ...(activeFilters.to     && { to:     activeFilters.to }),
         ...(activeFilters.search && { search: activeFilters.search }),
       };
-      const res = await tkApi.get("/logs/export", {
-        params,
-        responseType: "blob",
-      });
-      const url  = window.URL.createObjectURL(new Blob([res.data]));
+      const blob = await timeLogsApi.exportCsv(params);
+      const url  = window.URL.createObjectURL(new Blob([blob]));
       const link = document.createElement("a");
       const from = activeFilters.from || "all";
       const to   = activeFilters.to   || "all";
