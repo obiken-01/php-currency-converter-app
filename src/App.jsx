@@ -21,6 +21,7 @@ import TimeLogPage from "./work/pages/TimeLogPage";
 import TasksPage from "./work/pages/TasksPage";
 import ProjectsPage from "./work/pages/ProjectsPage";
 import ProjectDetailPage from "./work/pages/ProjectDetailPage";
+import TokensPage from "./work/pages/TokensPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -83,6 +84,7 @@ function App() {
                 <Route path="projects" element={<ProjectsPage />} />
                 <Route path="projects/:publicId" element={<ProjectDetailPage />} />
                 <Route path="timeline" element={<ProjectsPage timelineMode />} />
+                <Route path="tokens"   element={<TokensPage />} />
               </Route>
 
             </Routes>
