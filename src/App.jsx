@@ -22,6 +22,7 @@ import TasksPage from "./work/pages/TasksPage";
 import ProjectsPage from "./work/pages/ProjectsPage";
 import ProjectDetailPage from "./work/pages/ProjectDetailPage";
 import TokensPage from "./work/pages/TokensPage";
+import WorkDashboardPage from "./work/pages/WorkDashboardPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -77,9 +78,8 @@ function App() {
               <Route path="/work/login" element={<WorkLoginPage />} />
 
               <Route path="/work" element={<WorkLayout />}>
-                {/* Dashboard takes the index in F7; the log list until then. */}
-                <Route index       element={<TimeLogPage />} />
-                <Route path="logs"  element={<TimeLogPage />} />
+                <Route index           element={<WorkDashboardPage />} />
+                <Route path="logs"     element={<TimeLogPage />} />
                 <Route path="tasks"    element={<TasksPage />} />
                 <Route path="projects" element={<ProjectsPage />} />
                 <Route path="projects/:publicId" element={<ProjectDetailPage />} />
