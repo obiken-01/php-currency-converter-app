@@ -1,20 +1,24 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Alert, Box, Button, Stack, Typography } from "@mui/material";
+import { Box, Button, Stack, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import TaskFilterProvider from "../context/TaskFilterProvider";
+import { useTaskFilters } from "../context/taskFilterContext";
 import TaskFilterBar from "../components/tasks/TaskFilterBar";
 import TaskListView from "../components/tasks/TaskListView";
 import TaskDetailModal from "../components/tasks/TaskDetailModal";
 import TaskFormDialog from "../components/tasks/TaskFormDialog";
 import ViewSwitcher from "../components/tasks/ViewSwitcher";
+import KanbanBoard from "../components/tasks/board/KanbanBoard";
 
 function TasksPageInner() {
   const [searchParams, setSearchParams] = useSearchParams();
   const view = searchParams.get("view") === "board" ? "board" : "list";
+  const { filters } = useTaskFilters();
 
   const [openTaskId, setOpenTaskId] = useState(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  // null = closed; an object carries the column a card was added from.
+  const [createFrom, setCreateFrom] = useState(null);
 
   const setView = (next) => {
     const params = new URLSearchParams(searchParams);
@@ -42,7 +46,7 @@ function TasksPageInner() {
           variant="contained"
           size="small"
           startIcon={<AddIcon />}
-          onClick={() => setCreateOpen(true)}
+          onClick={() => setCreateFrom({})}
         >
           New task
         </Button>
@@ -51,9 +55,12 @@ function TasksPageInner() {
       <TaskFilterBar />
 
       {view === "board" ? (
-        <Alert severity="info">
-          The board view arrives in F3. Use the list for now.
-        </Alert>
+        <KanbanBoard
+          projectId={filters.projectId || null}
+          assignee={filters.assignee || null}
+          onOpenTask={setOpenTaskId}
+          onAddCard={(status) => setCreateFrom({ status })}
+        />
       ) : (
         <TaskListView onOpenTask={setOpenTaskId} />
       )}
@@ -64,8 +71,10 @@ function TasksPageInner() {
       />
 
       <TaskFormDialog
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
+        open={Boolean(createFrom)}
+        onClose={() => setCreateFrom(null)}
+        defaultStatus={createFrom?.status ?? null}
+        defaultProjectId={filters.projectId || null}
       />
     </Box>
   );
