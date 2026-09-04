@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Box, Button, Stack, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import TaskFilterProvider from "../context/TaskFilterProvider";
@@ -15,6 +15,11 @@ function TasksPageInner() {
   const [searchParams, setSearchParams] = useSearchParams();
   const view = searchParams.get("view") === "board" ? "board" : "list";
   const { filters } = useTaskFilters();
+  const navigate = useNavigate();
+
+  // "Log time" lands on the log page scoped to the task, with the picker
+  // already filled in.
+  const logTimeFor = (task) => navigate(`/work/logs?workItemId=${task.publicId}`);
 
   const [openTaskId, setOpenTaskId] = useState(null);
   // null = closed; an object carries the column a card was added from.
@@ -60,14 +65,16 @@ function TasksPageInner() {
           assignee={filters.assignee || null}
           onOpenTask={setOpenTaskId}
           onAddCard={(status) => setCreateFrom({ status })}
+          onLogTime={logTimeFor}
         />
       ) : (
-        <TaskListView onOpenTask={setOpenTaskId} />
+        <TaskListView onOpenTask={setOpenTaskId} onLogTime={logTimeFor} />
       )}
 
       <TaskDetailModal
         publicId={openTaskId}
         onClose={() => setOpenTaskId(null)}
+        onLogTime={logTimeFor}
       />
 
       <TaskFormDialog

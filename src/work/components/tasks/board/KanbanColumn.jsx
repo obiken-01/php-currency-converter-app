@@ -12,7 +12,7 @@ import { COLUMN_WIDTH } from "../../../constants/board";
  * @param {function} onAddCard  (status) => void
  * @param {boolean}  fullWidth  true inside the mobile one-column tabs
  */
-export default function KanbanColumn({ column, onOpenTask, onAddCard, fullWidth = false }) {
+export default function KanbanColumn({ column, onOpenTask, onAddCard, onLogTime, fullWidth = false }) {
   const { setNodeRef, isOver } = useDroppable({
     id: column.status,
     data: { type: "column", status: column.status },
@@ -82,7 +82,12 @@ export default function KanbanColumn({ column, onOpenTask, onAddCard, fullWidth 
         <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
           <Stack spacing={1}>
             {column.items.map((task) => (
-              <SortableTaskCard key={task.publicId} task={task} onClick={onOpenTask} />
+              <SortableTaskCard
+                key={task.publicId}
+                task={task}
+                onClick={onOpenTask}
+                onLogTime={onLogTime}
+              />
             ))}
           </Stack>
         </SortableContext>

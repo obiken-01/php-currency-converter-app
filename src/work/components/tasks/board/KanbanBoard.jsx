@@ -34,6 +34,7 @@ export default function KanbanBoard({
   assignee = null,
   onOpenTask,
   onAddCard,
+  onLogTime,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -123,7 +124,12 @@ export default function KanbanBoard({
   // TaskDetailModal is the move mechanism instead.
   if (isMobile) {
     return (
-      <KanbanMobileTabs columns={columns} onOpenTask={onOpenTask} onAddCard={onAddCard} />
+      <KanbanMobileTabs
+        columns={columns}
+        onOpenTask={onOpenTask}
+        onAddCard={onAddCard}
+        onLogTime={onLogTime}
+      />
     );
   }
 
@@ -145,6 +151,7 @@ export default function KanbanBoard({
             column={column}
             onOpenTask={onOpenTask}
             onAddCard={onAddCard}
+            onLogTime={onLogTime}
           />
         ))}
       </Box>

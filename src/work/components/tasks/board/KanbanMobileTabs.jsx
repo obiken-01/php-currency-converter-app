@@ -12,7 +12,7 @@ import TaskCard from "../TaskCard";
  * @param {function} onOpenTask
  * @param {function} onAddCard
  */
-export default function KanbanMobileTabs({ columns, onOpenTask, onAddCard }) {
+export default function KanbanMobileTabs({ columns, onOpenTask, onAddCard, onLogTime }) {
   const [index, setIndex] = useState(0);
   const active = columns[Math.min(index, columns.length - 1)];
 
@@ -82,7 +82,13 @@ export default function KanbanMobileTabs({ columns, onOpenTask, onAddCard }) {
       ) : (
         <Stack spacing={1}>
           {active.items.map((task) => (
-            <TaskCard key={task.publicId} task={task} onClick={onOpenTask} compact />
+            <TaskCard
+              key={task.publicId}
+              task={task}
+              onClick={onOpenTask}
+              onLogTime={onLogTime}
+              compact
+            />
           ))}
         </Stack>
       )}

@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   CircularProgress,
   Divider,
   IconButton,
@@ -26,8 +27,13 @@ import EditIcon from "@mui/icons-material/Edit";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import SaveIcon from "@mui/icons-material/Save";
+import { useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import timeLogsApi from "../api/timeLogsApi";
 import { toLocalDateTimeString } from "../utils/dates";
+import { qk } from "../constants/queryKeys";
+import WorkItemPicker from "../components/tasks/WorkItemPicker";
+import { useWorkItem } from "../hooks/useWorkItems";
 
 const DEFAULT_FORM = {
   taskDescription: "",
@@ -56,18 +62,28 @@ export default function TimeLogPage() {
   const [form,          setForm]          = useState(DEFAULT_FORM);
   const [submitting,    setSubmitting]    = useState(false);
   const [formError,     setFormError]     = useState(null);
+  const [formWorkItem,  setFormWorkItem]  = useState(null);
 
   // Edit
   const [editingId,     setEditingId]     = useState(null);
   const [editForm,      setEditForm]      = useState({});
+  const [editWorkItem,  setEditWorkItem]  = useState(null);
 
   // Filters
   const [filters,       setFilters]       = useState(DEFAULT_FILTERS);
   const [activeFilters, setActiveFilters] = useState(DEFAULT_FILTERS);
   const [exporting,     setExporting]     = useState(false);
 
+  // ?workItemId= both scopes the list to one task and prefills the create
+  // form, so the "Log time" button on a card lands somewhere useful.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const workItemId = searchParams.get("workItemId") ?? "";
+  const { data: scopedItem } = useWorkItem(workItemId || null);
+
+  const qc = useQueryClient();
+
   // ── Fetch logs ─────────────────────────────────────────────────
-  const fetchLogs = async (f = activeFilters) => {
+  const fetchLogs = async (f = activeFilters, itemId = workItemId) => {
     setLoading(true);
     setError(null);
     try {
@@ -79,6 +95,7 @@ export default function TimeLogPage() {
         ...(f.from   && { from:   f.from }),
         ...(f.to     && { to:     f.to }),
         ...(f.search && { search: f.search }),
+        ...(itemId   && { workItemId: itemId }),
       };
       const data = await timeLogsApi.query(params);
       setLogs(data.items ?? []);
@@ -91,7 +108,23 @@ export default function TimeLogPage() {
     }
   };
 
-  useEffect(() => { fetchLogs(); }, []);
+  useEffect(() => { fetchLogs(activeFilters, workItemId); }, [workItemId]);
+
+  // Keep the picker in step with the URL scope.
+  const pickedWorkItem = formWorkItem ?? scopedItem ?? null;
+
+  const clearWorkItemScope = () => {
+    const params = new URLSearchParams(searchParams);
+    params.delete("workItemId");
+    setSearchParams(params, { replace: true });
+    setFormWorkItem(null);
+  };
+
+  /** Totals in TaskDetailModal are derived from these logs. */
+  const invalidateLinkedTask = (itemId) => {
+    if (itemId) qc.invalidateQueries({ queryKey: qk.taskLogs(itemId) });
+    qc.invalidateQueries({ queryKey: qk.dashboard() });
+  };
 
   // ── Create log ─────────────────────────────────────────────────
   const handleSubmit = async (e) => {
@@ -113,11 +146,13 @@ export default function TimeLogPage() {
         taskDescription: form.taskDescription,
         duration:        Number(form.duration),
         loggedAt:        new Date(form.loggedAt).toISOString(),
+        workItemId:      pickedWorkItem?.publicId ?? null,
       });
       setForm({
         ...DEFAULT_FORM,
         loggedAt: toLocalDateTimeString(),
       });
+      invalidateLinkedTask(pickedWorkItem?.publicId);
       fetchLogs();
     } catch (err) {
       setFormError(err.response?.data?.message ?? "Failed to create log.");
@@ -127,10 +162,11 @@ export default function TimeLogPage() {
   };
 
   // ── Delete log ─────────────────────────────────────────────────
-  const handleDelete = async (id) => {
+  const handleDelete = async (log) => {
     if (!window.confirm("Delete this time log?")) return;
     try {
-      await timeLogsApi.remove(id);
+      await timeLogsApi.remove(log.id);
+      invalidateLinkedTask(log.workItem?.publicId);
       fetchLogs();
     } catch {
       setError("Failed to delete log.");
@@ -140,10 +176,11 @@ export default function TimeLogPage() {
   // ── Edit log ───────────────────────────────────────────────────
   const startEdit = (log) => {
     setEditingId(log.id);
+    setEditWorkItem(log.workItem ?? null);
     setEditForm({
       taskDescription: log.taskDescription,
       duration:        log.duration,
-      loggedAt:        new Date(log.loggedAt).toISOString().slice(0, 16),
+      loggedAt:        toLocalDateTimeString(log.loggedAt),
     });
   };
 
@@ -153,8 +190,10 @@ export default function TimeLogPage() {
         taskDescription: editForm.taskDescription,
         duration:        Number(editForm.duration),
         loggedAt:        new Date(editForm.loggedAt).toISOString(),
+        workItemId:      editWorkItem?.publicId ?? null,
       });
       setEditingId(null);
+      invalidateLinkedTask(editWorkItem?.publicId);
       fetchLogs();
     } catch {
       setError("Failed to update log.");
@@ -190,6 +229,7 @@ export default function TimeLogPage() {
         ...(activeFilters.from   && { from:   activeFilters.from }),
         ...(activeFilters.to     && { to:     activeFilters.to }),
         ...(activeFilters.search && { search: activeFilters.search }),
+        ...(workItemId && { workItemId }),
       };
       const blob = await timeLogsApi.exportCsv(params);
       const url  = window.URL.createObjectURL(new Blob([blob]));
@@ -226,6 +266,21 @@ export default function TimeLogPage() {
               {formError}
             </Alert>
           )}
+
+          {/* Linking the log to a work item is what makes the accomplishment
+              report generatable. Optional -- an unlinked log still saves. */}
+          <Box sx={{ mb: 2 }}>
+            <WorkItemPicker
+              value={pickedWorkItem}
+              onChange={(item) => {
+                setFormWorkItem(item);
+                // Clearing the picker should not leave the list scoped.
+                if (!item && workItemId) clearWorkItemScope();
+              }}
+              label="Task (optional)"
+              sx={{ maxWidth: 480 }}
+            />
+          </Box>
 
           <Stack
             component="form"
@@ -296,6 +351,18 @@ export default function TimeLogPage() {
               </Typography>
             )}
           </Stack>
+
+          {workItemId && (
+            <Box sx={{ mb: 2 }}>
+              <Chip
+                label={`Only logs for: ${scopedItem?.title ?? "selected task"}`}
+                onDelete={clearWorkItemScope}
+                color="primary"
+                variant="outlined"
+                size="small"
+              />
+            </Box>
+          )}
 
           <Stack
             direction={{ xs: "column", sm: "row" }}
@@ -380,6 +447,7 @@ export default function TimeLogPage() {
                     <TableRow>
                       <TableCell>Logged At</TableCell>
                       <TableCell>Task Description</TableCell>
+                      <TableCell>Linked Task</TableCell>
                       <TableCell align="right">Duration (hrs)</TableCell>
                       <TableCell align="right">Actions</TableCell>
                     </TableRow>
@@ -409,6 +477,14 @@ export default function TimeLogPage() {
                                 })}
                                 size="small"
                                 fullWidth
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <WorkItemPicker
+                                value={editWorkItem}
+                                onChange={setEditWorkItem}
+                                label=""
+                                sx={{ minWidth: 200 }}
                               />
                             </TableCell>
                             <TableCell align="right">
@@ -467,6 +543,20 @@ export default function TimeLogPage() {
                                 {log.taskDescription}
                               </Typography>
                             </TableCell>
+                            <TableCell>
+                              {log.workItem ? (
+                                <Chip
+                                  label={log.workItem.title}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ maxWidth: 220 }}
+                                />
+                              ) : (
+                                <Typography variant="caption" color="text.disabled">
+                                  —
+                                </Typography>
+                              )}
+                            </TableCell>
                             <TableCell align="right">
                               <Typography variant="body2">
                                 {Number(log.duration).toFixed(2).replace(/\.00$/, '')}
@@ -488,7 +578,7 @@ export default function TimeLogPage() {
                                   <IconButton
                                     size="small"
                                     color="error"
-                                    onClick={() => handleDelete(log.id)}
+                                    onClick={() => handleDelete(log)}
                                   >
                                     <DeleteIcon fontSize="small" />
                                   </IconButton>
