@@ -13,6 +13,9 @@ import TopMenu from "./components/common/TopMenu";
 import Footer from "./components/Footer";
 
 import ToastProvider from "./work/context/ToastProvider";
+import OfflineBar from "./components/common/OfflineBar";
+import InstallBanner from "./components/common/InstallBanner";
+import PWAUpdatePrompt from "./components/common/PWAUpdatePrompt";
 
 // Work
 import WorkLoginPage from "./work/pages/WorkLoginPage";
@@ -66,6 +69,11 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ToastProvider>
           <BrowserRouter>
+            {/* Above the routes so they show on the site tools and inside /work
+                alike, both of which bring their own chrome. */}
+            <OfflineBar />
+            <InstallBanner />
+
             <Routes>
 
               {/* ── Existing tools (with TopMenu + Footer) ── */}
@@ -88,6 +96,8 @@ function App() {
               </Route>
 
             </Routes>
+
+            <PWAUpdatePrompt />
           </BrowserRouter>
         </ToastProvider>
         <ReactQueryDevtools initialIsOpen={false} />

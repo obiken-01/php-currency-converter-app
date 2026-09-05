@@ -1,0 +1,5 @@
+# A cached service worker leaves users stuck on an old build indefinitely.
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+/manifest.webmanifest
+  Cache-Control: public, max-age=0, must-revalidate
