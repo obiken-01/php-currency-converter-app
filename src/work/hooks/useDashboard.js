@@ -21,15 +21,10 @@ export function useDashboard() {
   const cutoff = cutoffRange(new Date());
   const cutoffStart = toDateString(cutoff.start);
   const cutoffEnd = toDateString(cutoff.end);
-  const weekEnd = toDateString(addDays(new Date(), 7));
   const yesterday = toDateString(addDays(new Date(), -1));
 
   const logsToday = { from: today, to: today, page: 1, pageSize: 200 };
   const logsCutoff = { from: cutoffStart, to: cutoffEnd, page: 1, pageSize: 500 };
-  const dueThisWeek = {
-    from: today, to: weekEnd, statuses: OPEN_STATUSES,
-    page: 1, pageSize: 50, sortBy: "dueDate", sortDir: "asc",
-  };
   const overdue = {
     to: yesterday, statuses: OPEN_STATUSES,
     page: 1, pageSize: 50, sortBy: "dueDate", sortDir: "asc",
@@ -43,13 +38,12 @@ export function useDashboard() {
     queries: [
       { queryKey: qk.timeLogs(logsToday),  queryFn: () => timeLogsApi.query(logsToday),  staleTime: 60_000 },
       { queryKey: qk.timeLogs(logsCutoff), queryFn: () => timeLogsApi.query(logsCutoff), staleTime: 60_000 },
-      { queryKey: qk.tasks(dueThisWeek),   queryFn: () => tasksApi.query(dueThisWeek),   staleTime: 60_000 },
       { queryKey: qk.tasks(overdue),       queryFn: () => tasksApi.query(overdue),       staleTime: 60_000 },
       { queryKey: qk.tasks(inProgress),    queryFn: () => tasksApi.query(inProgress),    staleTime: 30_000 },
     ],
   });
 
-  const [todayQ, cutoffQ, dueQ, overdueQ, inProgressQ] = results;
+  const [todayQ, cutoffQ, overdueQ, inProgressQ] = results;
 
   return {
     isPending: results.some((r) => r.isPending),
@@ -61,10 +55,8 @@ export function useDashboard() {
       cutoff.start.toLocaleDateString(undefined, { month: "short" })
     }`,
 
-    dueThisWeekCount: dueQ.data?.totalCount ?? 0,
-    dueThisWeek: dueQ.data?.items ?? [],
-
-    overdueCount: overdueQ.data?.totalCount ?? 0,
+    // The overdue query stays because the shortlist below the fold still
+    // renders it; its count had no reader once the stat card went.
     overdue: overdueQ.data?.items ?? [],
 
     inProgress: inProgressQ.data?.items ?? [],
