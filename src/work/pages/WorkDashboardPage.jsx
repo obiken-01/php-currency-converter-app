@@ -15,8 +15,6 @@ import {
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
-import EventBusyIcon from "@mui/icons-material/EventBusy";
-import EventIcon from "@mui/icons-material/Event";
 import TimelapseIcon from "@mui/icons-material/Timelapse";
 import TaskCard from "../components/tasks/TaskCard";
 import TaskDetailModal from "../components/tasks/TaskDetailModal";
@@ -141,8 +139,8 @@ export default function WorkDashboardPage() {
     return (
       <Stack spacing={2}>
         <Grid container spacing={2}>
-          {Array.from({ length: 4 }, (_, i) => (
-            <Grid key={i} size={{ xs: 6, md: 3 }}>
+        {Array.from({ length: 2 }, (_, i) => (
+            <Grid key={i} size={{ xs: 12, sm: 6 }}>
               <Skeleton variant="rounded" height={92} />
             </Grid>
           ))}
@@ -165,7 +163,7 @@ export default function WorkDashboardPage() {
       </Typography>
 
       <Grid container spacing={2}>
-        <Grid size={{ xs: 6, md: 3 }}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <StatCard
             icon={<AccessTimeIcon fontSize="small" />}
             label="Hours logged today"
@@ -173,7 +171,7 @@ export default function WorkDashboardPage() {
             onClick={() => navigate("/work/logs")}
           />
         </Grid>
-        <Grid size={{ xs: 6, md: 3 }}>
+        <Grid size={{ xs: 12, sm: 6 }}>
           <StatCard
             icon={<TimelapseIcon fontSize="small" />}
             label="Hours this cutoff"
@@ -181,24 +179,6 @@ export default function WorkDashboardPage() {
             hint={dashboard.cutoffLabel}
             tone="info"
             onClick={() => navigate("/work/logs")}
-          />
-        </Grid>
-        <Grid size={{ xs: 6, md: 3 }}>
-          <StatCard
-            icon={<EventIcon fontSize="small" />}
-            label="Due this week"
-            value={dashboard.dueThisWeekCount}
-            tone="warning"
-            onClick={() => navigate("/work/tasks")}
-          />
-        </Grid>
-        <Grid size={{ xs: 6, md: 3 }}>
-          <StatCard
-            icon={<EventBusyIcon fontSize="small" />}
-            label="Overdue"
-            value={dashboard.overdueCount}
-            tone="error"
-            onClick={() => navigate("/work/tasks")}
           />
         </Grid>
       </Grid>
