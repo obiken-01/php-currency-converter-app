@@ -193,6 +193,31 @@ export function itemsRange(items = []) {
   return min && max ? { start: min, end: max } : null;
 }
 
+/**
+ * The window the chart draws.
+ *
+ * The items decide it whenever any of them have dates. The project's own span
+ * is deliberately NOT unioned in: a project that opened on 1 June with its
+ * first task in late August drew two empty months and pushed every bar off the
+ * right edge, which is a worse answer than not showing the project's start at
+ * all. The project range is the fallback for a timeline with nothing placed.
+ *
+ * @param {Array}  dated     items that have at least one date
+ * @param {object} timeline  ProjectTimelineDto, for rangeStart/rangeEnd
+ * @returns {{start: Date, end: Date}}
+ */
+export function chartRange(dated = [], timeline = null) {
+  const fromItems = itemsRange(dated);
+  if (fromItems) return padRange(fromItems.start, fromItems.end);
+
+  const start = parseDateOnly(timeline?.rangeStart);
+  const end = parseDateOnly(timeline?.rangeEnd);
+  if (start || end) return padRange(start ?? end, end ?? start);
+
+  const today = new Date();
+  return padRange(today, today);
+}
+
 /** Items the chart cannot place — shown in a collapsed list below it. */
 export const undatedItems = (items = []) => items.filter((item) => !isDated(item));
 

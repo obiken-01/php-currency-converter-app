@@ -18,10 +18,9 @@ import {
   LABEL_COLUMN_WIDTH,
   ROW_HEIGHT,
   buildDateColumns,
+  chartRange,
   columnsWidth,
   datedItems,
-  itemsRange,
-  padRange,
   pickScale,
   todayOffset,
   undatedItems,
@@ -53,26 +52,15 @@ export default function GanttChart({ timeline, onItemClick, scale: scaleProp }) 
   const dated = datedItems(items);
   const undated = [...(timeline?.undatedItems ?? []), ...undatedItems(items)];
 
-  const range = (() => {
-    const fromItems = itemsRange(dated);
-    // ProjectTimelineDto reports its own span as rangeStart/rangeEnd -- already
-    // widened to cover every item and milestone. Reading startDate/dueDate got
-    // null every time, so the chart only ever spanned the items it could place.
-    const projectStart = timeline?.rangeStart ? new Date(timeline.rangeStart) : null;
-    const projectEnd = timeline?.rangeEnd ? new Date(timeline.rangeEnd) : null;
-
-    const start = [fromItems?.start, projectStart].filter(Boolean)
-      .sort((a, b) => a - b)[0] ?? new Date();
-    const end = [fromItems?.end, projectEnd].filter(Boolean)
-      .sort((a, b) => b - a)[0] ?? new Date();
-
-    return padRange(start, end);
-  })();
+  const range = chartRange(dated, timeline);
 
   const scale = scaleOverride ?? pickScale(range.start, range.end);
   const dayWidth = DAY_WIDTH[scale];
 
   const columns = buildDateColumns(range.start, range.end, scale);
+  // The label column's header cell and the chart's header have to be the same
+  // height or every row sits half a line off its own name.
+  const headerHeight = milestones.length > 0 ? 62 : 46;
 
   const totalWidth = columnsWidth(columns);
   const originDate = columns[0]?.date ?? range.start;
@@ -131,7 +119,7 @@ export default function GanttChart({ timeline, onItemClick, scale: scaleProp }) 
         >
           <Box
             sx={{
-              height: milestones.length > 0 ? 62 : 46,
+              height: headerHeight,
               borderBottom: "1px solid",
               borderColor: "divider",
               display: "flex",
@@ -169,8 +157,19 @@ export default function GanttChart({ timeline, onItemClick, scale: scaleProp }) 
           </Box>
         </Box>
 
-        {/* Scrollable chart pane */}
-        <Box sx={{ flexGrow: 1, overflowX: "auto", position: "relative" }}>
+        {/* The one scroller. Both axes belong to the same element: a child with
+            overflowY set computes its overflowX to auto, so a vertically
+            scrolling box in here grew a second horizontal scrollbar under the
+            pane's own. The header is sticky, so it stays put as rows scroll. */}
+        <Box
+          sx={{
+            flexGrow: 1,
+            position: "relative",
+            overflow: "auto",
+            maxHeight: headerHeight + 460,
+          }}
+          onScroll={handleScroll}
+        >
           <GanttHeader
             columns={columns}
             milestones={milestones}
@@ -179,7 +178,8 @@ export default function GanttChart({ timeline, onItemClick, scale: scaleProp }) 
             totalWidth={totalWidth}
           />
 
-          <Box sx={{ position: "relative", maxHeight: 460, overflowY: "auto" }} onScroll={handleScroll}>
+          {/* Relative only, so the today line can span every row. */}
+          <Box sx={{ position: "relative", width: totalWidth }}>
             {todayLeft != null && (
               <Box
                 sx={{
