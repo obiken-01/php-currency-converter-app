@@ -1,8 +1,8 @@
 import { Box, Card, Chip, LinearProgress, Stack, Typography } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { getProjectStatus } from "../../constants/statuses";
+import { projectProgress, taskCounts } from "../../utils/project";
 import DateRangeChip from "../common/DateRangeChip";
-import AssigneeAvatar from "../common/AssigneeAvatar";
 
 /**
  * @param {object}   project   ProjectCardDto
@@ -12,9 +12,8 @@ export default function ProjectCard({ project, onClick }) {
   if (!project) return null;
 
   const status = getProjectStatus(project.status);
-  const progress = Math.max(0, Math.min(100, Number(project.progressPercent) || 0));
-  const done = project.doneCount ?? 0;
-  const total = project.itemCount ?? 0;
+  const progress = projectProgress(project);
+  const { total, done } = taskCounts(project);
 
   return (
     <Card
@@ -64,7 +63,7 @@ export default function ProjectCard({ project, onClick }) {
           </Typography>
         )}
 
-        <DateRangeChip start={project.startDate} due={project.dueDate} status={project.status} />
+        <DateRangeChip start={project.startDate} due={project.targetEndDate} status={project.status} />
 
         <Box flexGrow={1} />
 
@@ -76,7 +75,6 @@ export default function ProjectCard({ project, onClick }) {
             <Typography variant="caption" fontWeight={600}>
               {progress}%
             </Typography>
-            <AssigneeAvatar user={project.owner} size={20} />
           </Stack>
 
           <LinearProgress

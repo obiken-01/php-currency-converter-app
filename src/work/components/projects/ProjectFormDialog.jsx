@@ -23,19 +23,23 @@ import { useToast } from "../../context/toastContext";
 const EMPTY = {
   name: "",
   description: "",
-  status: "Planning",
+  status: "Planned",
   startDate: "",
-  dueDate: "",
+  targetEndDate: "",
 };
 
+// The end date is targetEndDate on both sides of the wire. Calling it dueDate
+// here meant the field bound to nothing on CreateProjectDto: the save returned
+// 200 and the date was simply gone, and reopening the dialog showed it blank
+// because the response has no dueDate to read back either.
 const buildForm = (initial) =>
   initial
     ? {
-        name:        initial.name ?? "",
-        description: initial.description ?? "",
-        status:      initial.status ?? "Planning",
-        startDate:   initial.startDate?.slice(0, 10) ?? "",
-        dueDate:     initial.dueDate?.slice(0, 10) ?? "",
+        name:          initial.name ?? "",
+        description:   initial.description ?? "",
+        status:        initial.status ?? "Planned",
+        startDate:     initial.startDate?.slice(0, 10) ?? "",
+        targetEndDate: initial.targetEndDate?.slice(0, 10) ?? "",
       }
     : { ...EMPTY };
 
@@ -54,17 +58,17 @@ function ProjectFormBody({ onClose, initial, create, update }) {
       setError("Name is required.");
       return;
     }
-    if (form.startDate && form.dueDate && form.startDate > form.dueDate) {
+    if (form.startDate && form.targetEndDate && form.startDate > form.targetEndDate) {
       setError("Start date must not be after the due date.");
       return;
     }
 
     const dto = {
-      name:        form.name.trim(),
-      description: form.description.trim() || null,
-      status:      form.status,
-      startDate:   form.startDate || null,
-      dueDate:     form.dueDate || null,
+      name:          form.name.trim(),
+      description:   form.description.trim() || null,
+      status:        form.status,
+      startDate:     form.startDate || null,
+      targetEndDate: form.targetEndDate || null,
     };
 
     try {
@@ -135,8 +139,8 @@ function ProjectFormBody({ onClose, initial, create, update }) {
             <TextField
               label="Due date"
               type="date"
-              value={form.dueDate}
-              onChange={set("dueDate")}
+              value={form.targetEndDate}
+              onChange={set("targetEndDate")}
               InputLabelProps={{ shrink: true }}
               size="small"
               fullWidth

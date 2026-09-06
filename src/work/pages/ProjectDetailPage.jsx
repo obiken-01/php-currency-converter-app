@@ -21,6 +21,7 @@ import { alpha } from "@mui/material/styles";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditIcon from "@mui/icons-material/Edit";
 import { getProjectStatus } from "../constants/statuses";
+import { ownerOf, projectProgress, taskCounts } from "../utils/project";
 import DateRangeChip from "../components/common/DateRangeChip";
 import AssigneeAvatar from "../components/common/AssigneeAvatar";
 import ProjectFormDialog from "../components/projects/ProjectFormDialog";
@@ -74,7 +75,9 @@ export default function ProjectDetailPage() {
   }
 
   const status = getProjectStatus(project.status);
-  const progress = Math.max(0, Math.min(100, Number(project.progressPercent) || 0));
+  const progress = projectProgress(project);
+  const { total, done } = taskCounts(project);
+  const owner = ownerOf(project);
 
   return (
     <Box>
@@ -122,12 +125,12 @@ export default function ProjectDetailPage() {
           )}
 
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" gap={1}>
-            <DateRangeChip start={project.startDate} due={project.dueDate} status={project.status} />
-            {project.owner && (
+            <DateRangeChip start={project.startDate} due={project.targetEndDate} status={project.status} />
+            {owner && (
               <Stack direction="row" spacing={0.75} alignItems="center">
-                <AssigneeAvatar user={project.owner} size={22} />
+                <AssigneeAvatar user={owner} size={22} />
                 <Typography variant="caption" color="text.secondary">
-                  {project.owner.displayName || project.owner.username}
+                  {owner.displayName}
                 </Typography>
               </Stack>
             )}
@@ -152,11 +155,12 @@ export default function ProjectDetailPage() {
             />
           </Box>
 
+          {/* Tasks and Done are the only two counts the API reports. "In progress"
+              and "Overdue" had no field behind them and sat at 0 forever, which
+              read as a broken project rather than a missing number. */}
           <Grid container spacing={2}>
-            <Grid size={{ xs: 6, sm: 3 }}><Stat label="Tasks" value={project.itemCount ?? 0} /></Grid>
-            <Grid size={{ xs: 6, sm: 3 }}><Stat label="Done" value={project.doneCount ?? 0} /></Grid>
-            <Grid size={{ xs: 6, sm: 3 }}><Stat label="In progress" value={project.inProgressCount ?? 0} /></Grid>
-            <Grid size={{ xs: 6, sm: 3 }}><Stat label="Overdue" value={project.overdueCount ?? 0} /></Grid>
+            <Grid size={{ xs: 6, sm: 3 }}><Stat label="Tasks" value={total} /></Grid>
+            <Grid size={{ xs: 6, sm: 3 }}><Stat label="Done" value={done} /></Grid>
           </Grid>
         </Stack>
       )}

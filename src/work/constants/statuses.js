@@ -34,12 +34,17 @@ export const isClosed = (v) => CLOSED_STATUSES.includes(v);
 /** Sensible defaults for the WorkItemPicker and "log time against" flows. */
 export const ACTIVE_STATUSES = ["Todo", "InProgress"];
 
+// `value` is the ProjectStatus enum name on the wire; `label` is ours to choose.
+// The two used to be the same string, which meant "Planning" and "Archived" --
+// names the enum does not have -- were sent as-is and the whole save came back
+// 400. A project already stored as Planned or Cancelled also matched no row
+// here, so its chip fell through to the first entry and read "Planning".
 export const PROJECT_STATUSES = [
-  { value: "Planning",  label: "Planning",  color: "#9E9E9E" },
+  { value: "Planned",   label: "Planning",  color: "#9E9E9E" },
   { value: "Active",    label: "Active",    color: "#42A5F5" },
   { value: "OnHold",    label: "On Hold",   color: "#FFA726" },
   { value: "Completed", label: "Completed", color: "#66BB6A" },
-  { value: "Archived",  label: "Archived",  color: "#BDBDBD" },
+  { value: "Cancelled", label: "Archived",  color: "#BDBDBD" },
 ];
 
 export const getProjectStatus = (v) =>
