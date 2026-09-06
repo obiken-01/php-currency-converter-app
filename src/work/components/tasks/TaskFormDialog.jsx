@@ -22,6 +22,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { WORK_ITEM_STATUSES, PRIORITIES } from "../../constants/statuses";
+import { toWorkItemDto } from "../../utils/workItem";
 import { useProjects } from "../../hooks/useProjects";
 import { useLabels } from "../../hooks/useLabels";
 import { useDirectory } from "../../hooks/useDirectory";
@@ -41,21 +42,26 @@ const EMPTY = {
   assigneeId: "",
 };
 
+// The API returns work items FLAT -- projectPublicId / projectName /
+// assigneePublicId / assigneeDisplayName -- never a nested project or assignee
+// object, and its labels carry an integer `id`. Reading the nested shape here
+// left the pickers empty on every edit, so a save then posted "no project" and
+// "unassigned" over whatever the task actually had.
 const buildForm = (initial, defaultProjectId, defaultStatus) =>
   initial
     ? {
         title:       initial.title ?? "",
         summary:     initial.summary ?? "",
         description: initial.description ?? "",
-        projectId:   initial.project?.publicId ?? initial.projectId ?? "",
+        projectId:   initial.projectPublicId ?? "",
         status:      initial.status ?? "Todo",
         priority:    initial.priority ?? "Normal",
         // Date-only fields stay plain YYYY-MM-DD strings; running them
         // through toISOString() shifts the day across timezones.
         startDate:   initial.startDate?.slice(0, 10) ?? "",
         dueDate:     initial.dueDate?.slice(0, 10) ?? "",
-        labelIds:    (initial.labels ?? []).map((l) => l.publicId),
-        assigneeId:  initial.assignee?.publicId ?? "",
+        labelIds:    (initial.labels ?? []).map((l) => l.id),
+        assigneeId:  initial.assigneePublicId ?? "",
       }
     : {
         ...EMPTY,
@@ -96,18 +102,7 @@ function TaskFormBody({ onClose, initial, defaultProjectId, defaultStatus, creat
       return;
     }
 
-    const dto = {
-      title:       form.title.trim(),
-      summary:     form.summary.trim() || null,
-      description: form.description.trim() || null,
-      projectId:   form.projectId || null,
-      status:      form.status,
-      priority:    form.priority,
-      startDate:   form.startDate || null,
-      dueDate:     form.dueDate || null,
-      labelIds:    form.labelIds,
-      assigneeId:  form.assigneeId || null,
-    };
+    const dto = toWorkItemDto(form, { isEdit });
 
     try {
       if (isEdit) {
@@ -243,7 +238,7 @@ function TaskFormBody({ onClose, initial, defaultProjectId, defaultStatus, creat
               renderValue={(selected) => (
                 <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
                   {selected.map((id) => {
-                    const label = labelList.find((l) => l.publicId === id);
+                    const label = labelList.find((l) => l.id === id);
                     return (
                       <Chip key={id} size="small" label={label?.name ?? id} sx={{ height: 20 }} />
                     );
@@ -252,8 +247,8 @@ function TaskFormBody({ onClose, initial, defaultProjectId, defaultStatus, creat
               )}
             >
               {labelList.map((l) => (
-                <MenuItem key={l.publicId} value={l.publicId}>
-                  <Checkbox size="small" checked={form.labelIds.includes(l.publicId)} />
+                <MenuItem key={l.id} value={l.id}>
+                  <Checkbox size="small" checked={form.labelIds.includes(l.id)} />
                   <ListItemText primary={l.name} />
                 </MenuItem>
               ))}

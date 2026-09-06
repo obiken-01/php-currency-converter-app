@@ -63,9 +63,9 @@ export default function WorkItemPicker({ value, onChange, label = "Task", size =
           <Box component="li" key={key} {...rest} sx={{ display: "flex", gap: 1 }}>
             <Box sx={{ flexGrow: 1, minWidth: 0 }}>
               <Typography variant="body2" noWrap>{option.title}</Typography>
-              {option.project?.name && (
+              {option.projectName && (
                 <Typography variant="caption" color="text.secondary" noWrap>
-                  {option.project.name}
+                  {option.projectName}
                 </Typography>
               )}
             </Box>

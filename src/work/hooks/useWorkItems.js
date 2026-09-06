@@ -104,8 +104,10 @@ export function useSetWorkItemStatus() {
 export function useSetWorkItemAssignee() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ publicId, assigneeId }) =>
-      tasksApi.setAssignee(publicId, { assigneeId }),
+    // UpdateAssigneeDto reads assigneePublicId; an assigneeId key bound to
+    // nothing and every assignment silently unassigned instead.
+    mutationFn: ({ publicId, assigneePublicId }) =>
+      tasksApi.setAssignee(publicId, { assigneePublicId }),
     onSuccess: (_data, { publicId }) => invalidateAll(qc, publicId),
   });
 }

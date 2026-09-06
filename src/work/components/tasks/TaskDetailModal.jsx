@@ -29,6 +29,7 @@ import CheckIcon from "@mui/icons-material/Check";
 import { WORK_ITEM_STATUSES, PRIORITIES } from "../../constants/statuses";
 import { LINKED_LOGS_ENABLED } from "../../constants/features";
 import { formatDateTime, formatShortDate } from "../../utils/dates";
+import { assigneeOf } from "../../utils/workItem";
 import LabelChip from "../common/LabelChip";
 import AssigneeAvatar from "../common/AssigneeAvatar";
 import DateRangeChip from "../common/DateRangeChip";
@@ -242,21 +243,21 @@ function TaskDetailBody({ publicId, onClose, onLogTime, onRequestEdit }) {
             <Stack spacing={0.5}>
               <MetaRow label="Project">
                 <Typography variant="body2">
-                  {task.project?.name ?? <Box component="span" color="text.disabled">None</Box>}
+                  {task.projectName ?? <Box component="span" color="text.disabled">None</Box>}
                 </Typography>
               </MetaRow>
 
               <MetaRow label="Assignee">
                 <Stack direction="row" spacing={1} alignItems="center">
-                  <AssigneeAvatar user={task.assignee} size={24} />
+                  <AssigneeAvatar user={assigneeOf(task)} size={24} />
                   <FormControl size="small" sx={{ minWidth: 180 }}>
                     <Select
-                      value={task.assignee?.publicId ?? ""}
+                      value={task.assigneePublicId ?? ""}
                       displayEmpty
                       onChange={(e) =>
                         setAssignee.mutate({
                           publicId,
-                          assigneeId: e.target.value || null,
+                          assigneePublicId: e.target.value || null,
                         })
                       }
                     >
@@ -296,7 +297,7 @@ function TaskDetailBody({ publicId, onClose, onLogTime, onRequestEdit }) {
                 {task.labels?.length ? (
                   <Stack direction="row" gap={0.5} flexWrap="wrap">
                     {task.labels.map((l) => (
-                      <LabelChip key={l.publicId ?? l.name} label={l} />
+                      <LabelChip key={l.id ?? l.name} label={l} />
                     ))}
                   </Stack>
                 ) : (
