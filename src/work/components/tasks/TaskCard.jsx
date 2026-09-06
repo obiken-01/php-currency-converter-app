@@ -2,6 +2,7 @@ import { Box, Card, IconButton, Stack, Tooltip, Typography } from "@mui/material
 import MoreTimeIcon from "@mui/icons-material/MoreTime";
 import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
 import { getPriority } from "../../constants/statuses";
+import { assigneeOf } from "../../utils/workItem";
 import PriorityIcon from "../common/PriorityIcon";
 import LabelChip from "../common/LabelChip";
 import DateRangeChip from "../common/DateRangeChip";
@@ -117,7 +118,7 @@ export default function TaskCard({
               status={task.status}
             />
             {visibleLabels.map((label) => (
-              <LabelChip key={label.publicId ?? label.name} label={label} />
+              <LabelChip key={label.id ?? label.name} label={label} />
             ))}
             {overflow > 0 && (
               <Tooltip title={labels.slice(MAX_LABELS).map((l) => l.name).join(", ")}>
@@ -131,7 +132,7 @@ export default function TaskCard({
 
         {/* Footer: project + assignee */}
         <Stack direction="row" alignItems="center" spacing={0.5} sx={{ minHeight: 24 }}>
-          {!compact && task.project && (
+          {!compact && task.projectName && (
             <Stack direction="row" alignItems="center" spacing={0.5} sx={{ minWidth: 0 }}>
               <FolderOutlinedIcon sx={{ fontSize: 14, color: "text.disabled" }} />
               <Typography
@@ -140,12 +141,12 @@ export default function TaskCard({
                 noWrap
                 sx={{ maxWidth: 160 }}
               >
-                {task.project.name}
+                {task.projectName}
               </Typography>
             </Stack>
           )}
           <Box flexGrow={1} />
-          <AssigneeAvatar user={task.assignee} size={22} />
+          <AssigneeAvatar user={assigneeOf(task)} size={22} />
         </Stack>
 
       </Stack>

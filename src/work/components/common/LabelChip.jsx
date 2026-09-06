@@ -4,11 +4,11 @@ import { alpha } from "@mui/material/styles";
 const FALLBACK = "#78909C";
 
 /**
- * @param {object} label  { publicId, name, color }
+ * @param {object} label  { id, name, colorHex } -- the API's LabelDto shape.
  */
 export default function LabelChip({ label, size = "small", onDelete, onClick, sx }) {
   if (!label) return null;
-  const color = label.color || FALLBACK;
+  const color = label.colorHex || FALLBACK;
 
   return (
     <Chip
