@@ -3,6 +3,7 @@ import {
   DAY_WIDTH,
   barGeometry,
   buildDateColumns,
+  chartRange,
   columnsWidth,
   datedItems,
   itemsRange,
@@ -189,5 +190,42 @@ describe("columnsWidth", () => {
   it("sums the column widths", () => {
     const columns = buildDateColumns(d("2026-06-01"), d("2026-06-05"), "day");
     expect(columnsWidth(columns)).toBe(5 * DAY_WIDTH.day);
+  });
+});
+
+describe("chartRange", () => {
+  const phases = [
+    { publicId: "p1", startDate: "2026-08-24", endDate: "2026-09-01" },
+    { publicId: "p2", startDate: "2026-09-03", endDate: "2026-09-03" },
+  ];
+
+  it("frames the work, not the project's much earlier start", () => {
+    // The project opened on 1 June; its first task is 24 August. Spanning both
+    // drew two empty months and pushed every bar off the right edge.
+    const range = chartRange(phases, {
+      rangeStart: "2026-06-01",
+      rangeEnd: "2026-09-03",
+    });
+
+    expect(range.start.getMonth()).toBe(7); // August
+    expect(range.start >= d("2026-08-14")).toBe(true);
+    expect(range.end >= d("2026-09-03")).toBe(true);
+  });
+
+  it("still covers every dated item", () => {
+    const range = chartRange(phases, null);
+    expect(range.start <= d("2026-08-24")).toBe(true);
+    expect(range.end >= d("2026-09-03")).toBe(true);
+  });
+
+  it("falls back to the project's span when nothing is placed", () => {
+    const range = chartRange([], { rangeStart: "2026-06-01", rangeEnd: "2026-06-30" });
+    expect(range.start <= d("2026-06-01")).toBe(true);
+    expect(range.end >= d("2026-06-30")).toBe(true);
+  });
+
+  it("survives a timeline with no dates anywhere", () => {
+    const range = chartRange([], null);
+    expect(range.start <= range.end).toBe(true);
   });
 });
