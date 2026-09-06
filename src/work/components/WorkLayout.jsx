@@ -16,10 +16,15 @@ import {
   useTheme,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import CloudOffIcon from "@mui/icons-material/CloudOff";
+import SyncIcon from "@mui/icons-material/Sync";
 import LogoutIcon from "@mui/icons-material/Logout";
 import TimerIcon from "@mui/icons-material/Timer";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import { clearTokens, getAccessToken } from "../api/workApi";
+import { isAuthRejection } from "../offline/policy";
+import { cachedUser, rememberUser, forgetUser } from "../offline/session";
+import useOutbox from "../hooks/useOutbox";
 import authApi from "../api/authApi";
 import WorkSubNav from "./WorkSubNav";
 import WorkBottomNav from "./WorkBottomNav";
@@ -32,8 +37,11 @@ export default function WorkLayout() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const [user, setUser] = useState(null);
+  // Seeded from the last successful check so an offline start has a name to
+  // show and nothing flashes through a signed-out state.
+  const [user, setUser] = useState(cachedUser);
   const [checking, setChecking] = useState(true);
+  const outbox = useOutbox();
 
   useEffect(() => {
     const token = getAccessToken();
@@ -44,9 +52,19 @@ export default function WorkLayout() {
 
     authApi
       .me()
-      .then(setUser)
-      .catch(() => {
+      .then((me) => {
+        setUser(me);
+        rememberUser(me);
+      })
+      .catch((error) => {
+        // Only the server may end a session. A request that never reached it
+        // says nothing about whether the token is good, and clearing it there
+        // meant every lost signal became a forced login -- with the queued
+        // work still sitting in the outbox, now unsendable.
+        if (!isAuthRejection(error)) return;
+
         clearTokens();
+        forgetUser();
         navigate("/work/login", { replace: true });
       })
       .finally(() => setChecking(false));
@@ -59,6 +77,7 @@ export default function WorkLayout() {
       // ignore revoke errors
     } finally {
       clearTokens();
+      forgetUser();
       navigate("/work/login", { replace: true });
     }
   };
@@ -112,6 +131,31 @@ export default function WorkLayout() {
           </Stack>
 
           <Stack direction="row" alignItems="center" spacing={1}>
+            {outbox.count > 0 && (
+              <Tooltip
+                title={
+                  outbox.syncing
+                    ? "Sending your offline changes"
+                    : "Saved on this device, waiting for a connection"
+                }
+              >
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  spacing={0.5}
+                  onClick={outbox.sync}
+                  sx={{ cursor: "pointer", color: "warning.main" }}
+                >
+                  {outbox.syncing
+                    ? <SyncIcon fontSize="small" />
+                    : <CloudOffIcon fontSize="small" />}
+                  <Typography variant="caption" fontWeight={700}>
+                    {outbox.count}
+                  </Typography>
+                </Stack>
+              </Tooltip>
+            )}
+
             <Tooltip title="Access tokens">
               <IconButton size="small" onClick={() => navigate("/work/tokens")}>
                 <VpnKeyIcon fontSize="small" />

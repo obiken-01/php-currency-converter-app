@@ -5,6 +5,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import tasksApi from "../api/tasksApi";
+import { wasQueued } from "../api/workApi";
 import { qk, qkPrefix } from "../constants/queryKeys";
 import { toQueryParams } from "../context/taskFilterContext";
 import { useToast } from "../context/toastContext";
@@ -27,7 +28,13 @@ export function useWorkItem(publicId) {
   });
 }
 
-/** Invalidate every view a task can appear in. */
+/**
+ * Invalidate every view a task can appear in.
+ *
+ * Skipped for a write that only reached the outbox: refetching offline is
+ * served from the service worker's cache, which cannot know about a change
+ * that has not been sent -- so the refetch would quietly undo it on screen.
+ */
 const invalidateAll = (qc, publicId) => {
   qc.invalidateQueries({ queryKey: qkPrefix.tasks });
   qc.invalidateQueries({ queryKey: qkPrefix.board });
@@ -40,7 +47,9 @@ export function useCreateWorkItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: tasksApi.create,
-    onSuccess: (created) => invalidateAll(qc, created?.publicId),
+    onSuccess: (created) => {
+      if (!wasQueued(created)) invalidateAll(qc, created?.publicId);
+    },
   });
 }
 
@@ -48,7 +57,9 @@ export function useUpdateWorkItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ publicId, dto }) => tasksApi.update(publicId, dto),
-    onSuccess: (_data, { publicId }) => invalidateAll(qc, publicId),
+    onSuccess: (data, { publicId }) => {
+      if (!wasQueued(data)) invalidateAll(qc, publicId);
+    },
   });
 }
 
@@ -97,7 +108,9 @@ export function useSetWorkItemStatus() {
       }
     },
 
-    onSettled: (_data, _err, { publicId }) => invalidateAll(qc, publicId),
+    onSettled: (data, _err, { publicId }) => {
+      if (!wasQueued(data)) invalidateAll(qc, publicId);
+    },
   });
 }
 
@@ -108,7 +121,9 @@ export function useSetWorkItemAssignee() {
     // nothing and every assignment silently unassigned instead.
     mutationFn: ({ publicId, assigneePublicId }) =>
       tasksApi.setAssignee(publicId, { assigneePublicId }),
-    onSuccess: (_data, { publicId }) => invalidateAll(qc, publicId),
+    onSuccess: (data, { publicId }) => {
+      if (!wasQueued(data)) invalidateAll(qc, publicId);
+    },
   });
 }
 
