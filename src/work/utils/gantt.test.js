@@ -86,18 +86,36 @@ describe("buildDateColumns", () => {
 describe("barGeometry", () => {
   const origin = d("2026-06-01");
 
+  // A timeline item's far end is endDate. These fixtures used dueDate, which
+  // only a work item card has -- so the suite was green while every real bar
+  // on screen collapsed to its start date.
   it("places a bar at the right offset and width", () => {
     const geometry = barGeometry(
-      { startDate: "2026-06-03", dueDate: "2026-06-05" },
+      { startDate: "2026-06-03", endDate: "2026-06-05" },
       origin,
       DAY_WIDTH.day
     );
     expect(geometry).toEqual({ left: 2 * 32, width: 3 * 32 });
   });
 
+  it("spans the whole run rather than the start day alone", () => {
+    // Aug 24 -> Sep 1 drew as one cell: nine days of work as a single square.
+    const geometry = barGeometry(
+      { startDate: "2026-08-24", endDate: "2026-09-01" },
+      d("2026-08-24"),
+      DAY_WIDTH.day
+    );
+    expect(geometry).toEqual({ left: 0, width: 9 * 32 });
+  });
+
+  it("still understands a card's dueDate", () => {
+    expect(barGeometry({ startDate: "2026-06-03", dueDate: "2026-06-05" }, origin, 32))
+      .toEqual({ left: 2 * 32, width: 3 * 32 });
+  });
+
   it("gives a single-day item one column of width", () => {
     const geometry = barGeometry(
-      { startDate: "2026-06-03", dueDate: "2026-06-03" },
+      { startDate: "2026-06-03", endDate: "2026-06-03" },
       origin,
       DAY_WIDTH.day
     );
@@ -105,7 +123,7 @@ describe("barGeometry", () => {
   });
 
   it("falls back to the other end when only one date is set", () => {
-    expect(barGeometry({ dueDate: "2026-06-04" }, origin, 32))
+    expect(barGeometry({ endDate: "2026-06-04" }, origin, 32))
       .toEqual({ left: 3 * 32, width: 32 });
     expect(barGeometry({ startDate: "2026-06-04" }, origin, 32))
       .toEqual({ left: 3 * 32, width: 32 });
@@ -115,9 +133,9 @@ describe("barGeometry", () => {
     expect(barGeometry({ title: "no dates" }, origin, 32)).toBeNull();
   });
 
-  it("tolerates a due date before the start date", () => {
+  it("tolerates an end date before the start date", () => {
     const geometry = barGeometry(
-      { startDate: "2026-06-05", dueDate: "2026-06-03" },
+      { startDate: "2026-06-05", endDate: "2026-06-03" },
       origin,
       32
     );
@@ -145,8 +163,8 @@ describe("todayOffset", () => {
 
 describe("itemsRange and the dated/undated split", () => {
   const items = [
-    { publicId: "a", startDate: "2026-04-10", dueDate: "2026-04-20" },
-    { publicId: "b", dueDate: "2026-05-02" },
+    { publicId: "a", startDate: "2026-04-10", endDate: "2026-04-20" },
+    { publicId: "b", endDate: "2026-05-02" },
     { publicId: "c" },
   ];
 

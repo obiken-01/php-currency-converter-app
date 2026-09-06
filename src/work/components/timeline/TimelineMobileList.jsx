@@ -35,7 +35,7 @@ export default function TimelineMobileList({ timeline, onItemClick }) {
       return (aDate?.getTime() ?? 0) - (bDate?.getTime() ?? 0);
     })
     .forEach((item) => {
-      const date = parseDateOnly(item.startDate ?? item.dueDate);
+      const date = parseDateOnly(item.startDate ?? item.endDate ?? item.dueDate);
       const key = monthKey(date);
       if (!groups.has(key)) groups.set(key, { label: monthLabel(date), items: [] });
       groups.get(key).items.push(item);
@@ -92,7 +92,7 @@ export default function TimelineMobileList({ timeline, onItemClick }) {
                       <StatusChip status={item.status} />
                       <DateRangeChip
                         start={item.startDate}
-                        due={item.dueDate}
+                        due={item.endDate ?? item.dueDate}
                         status={item.status}
                       />
                     </Stack>

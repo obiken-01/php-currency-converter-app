@@ -126,18 +126,33 @@ export const columnsWidth = (columns) =>
   columns.reduce((sum, column) => sum + column.width, 0);
 
 /**
+ * Where a timeline item begins and ends.
+ *
+ * TimelineItemDto calls the far end `endDate`; a work item card calls the same
+ * thing `dueDate`. The chart only ever reads dueDate, which a timeline item
+ * does not have, so every bar collapsed onto its start date and a task running
+ * Aug 24 to Sep 1 drew as a single day. Both names are read here, once.
+ */
+export const itemStart = (item) => parseDateOnly(item?.startDate);
+export const itemEnd = (item) =>
+  parseDateOnly(item?.endDate) ?? parseDateOnly(item?.dueDate);
+
+/** Has this item enough date information to be drawn at all? */
+export const isDated = (item) => Boolean(itemStart(item) || itemEnd(item));
+
+/**
  * Pixel offsets for one bar. The first column may start before rangeStart
  * (weeks and months snap backwards), so offsets are measured from the first
  * column's date rather than from rangeStart itself.
  *
- * @param {object} item        needs startDate and/or dueDate
+ * @param {object} item        needs startDate and/or endDate (or dueDate)
  * @param {Date}   originDate  date of the first column
  * @param {number} dayWidth
  * @returns {{left: number, width: number}|null} null when the item has no dates
  */
 export function barGeometry(item, originDate, dayWidth) {
-  const start = parseDateOnly(item.startDate) ?? parseDateOnly(item.dueDate);
-  const end = parseDateOnly(item.dueDate) ?? parseDateOnly(item.startDate);
+  const start = itemStart(item) ?? itemEnd(item);
+  const end = itemEnd(item) ?? itemStart(item);
   if (!start || !end) return null;
 
   const from = start <= end ? start : end;
@@ -168,9 +183,7 @@ export function itemsRange(items = []) {
   let max = null;
 
   items.forEach((item) => {
-    const start = parseDateOnly(item.startDate);
-    const end = parseDateOnly(item.dueDate);
-    [start, end].forEach((date) => {
+    [itemStart(item), itemEnd(item)].forEach((date) => {
       if (!date) return;
       if (!min || date < min) min = date;
       if (!max || date > max) max = date;
@@ -181,8 +194,6 @@ export function itemsRange(items = []) {
 }
 
 /** Items the chart cannot place — shown in a collapsed list below it. */
-export const undatedItems = (items = []) =>
-  items.filter((item) => !item.startDate && !item.dueDate);
+export const undatedItems = (items = []) => items.filter((item) => !isDated(item));
 
-export const datedItems = (items = []) =>
-  items.filter((item) => item.startDate || item.dueDate);
+export const datedItems = (items = []) => items.filter((item) => isDated(item));

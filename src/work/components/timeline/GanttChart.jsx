@@ -47,13 +47,19 @@ export default function GanttChart({ timeline, onItemClick, scale: scaleProp }) 
 
   // No useMemo here: the React Compiler memoises these, and hand-written
   // deps on optional chains fight it.
+  // The API already keeps undated items out of `items` and returns them
+  // separately; splitting `items` again left the undated list permanently
+  // empty, so tasks with no dates vanished from the screen entirely.
   const dated = datedItems(items);
-  const undated = undatedItems(items);
+  const undated = [...(timeline?.undatedItems ?? []), ...undatedItems(items)];
 
   const range = (() => {
     const fromItems = itemsRange(dated);
-    const projectStart = timeline?.startDate ? new Date(timeline.startDate) : null;
-    const projectEnd = timeline?.dueDate ? new Date(timeline.dueDate) : null;
+    // ProjectTimelineDto reports its own span as rangeStart/rangeEnd -- already
+    // widened to cover every item and milestone. Reading startDate/dueDate got
+    // null every time, so the chart only ever spanned the items it could place.
+    const projectStart = timeline?.rangeStart ? new Date(timeline.rangeStart) : null;
+    const projectEnd = timeline?.rangeEnd ? new Date(timeline.rangeEnd) : null;
 
     const start = [fromItems?.start, projectStart].filter(Boolean)
       .sort((a, b) => a - b)[0] ?? new Date();
