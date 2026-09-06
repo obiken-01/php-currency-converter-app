@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import tasksApi from "../api/tasksApi";
+import { wasQueued } from "../api/workApi";
 import { qk, qkPrefix } from "../constants/queryKeys";
 import { getStatus } from "../constants/statuses";
 import { useToast } from "../context/toastContext";
@@ -87,7 +88,10 @@ export function useMoveWorkItem(projectId, assignee) {
       if (err?.response?.status !== 409) toast.error("Could not move the card.");
     },
 
-    onSettled: () => {
+    onSettled: (data) => {
+      // A queued drag keeps the card where it was dropped: refetching would
+      // pull the pre-drag board back out of the service worker cache.
+      if (wasQueued(data)) return;
       qc.invalidateQueries({ queryKey: key });
       qc.invalidateQueries({ queryKey: qkPrefix.tasks });
       // The dashboard's "In progress" shortlist otherwise keeps showing a
