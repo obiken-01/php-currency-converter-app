@@ -5,7 +5,9 @@ export const tokensApi = {
   // Returns the raw token exactly once — the caller must show it before
   // anything can navigate away.
   create: (dto)      => workApi.post("/tokens", dto).then(unwrap),
-  revoke: (publicId) => workApi.delete(`/tokens/${publicId}`).then(unwrap),
+  // PatDto is keyed by an integer id, and the route is {id:int}: a publicId
+  // here was undefined, so revoke asked for /tokens/undefined and 404'd.
+  revoke: (id) => workApi.delete(`/tokens/${id}`).then(unwrap),
 };
 
 export default tokensApi;
