@@ -19,6 +19,7 @@ export default function GanttRow({ item, originDate, dayWidth, totalWidth, colum
   const geometry = barGeometry(item, originDate, dayWidth);
   const status = getStatus(item.status);
   const progress = Math.max(0, Math.min(100, Number(item.progressPercent) || 0));
+  const end = item.endDate ?? item.dueDate;
 
   return (
     <Box
@@ -55,7 +56,7 @@ export default function GanttRow({ item, originDate, dayWidth, totalWidth, colum
               <div>{item.title}</div>
               <div>
                 {formatShortDate(item.startDate)}
-                {item.dueDate ? ` → ${formatShortDate(item.dueDate)}` : ""}
+                {end ? ` → ${formatShortDate(end)}` : ""}
               </div>
               <div>{status.label}{progress ? ` · ${progress}%` : ""}</div>
             </>
