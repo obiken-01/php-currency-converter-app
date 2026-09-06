@@ -152,7 +152,7 @@ function TokenRow({ token, onRevoke, revoking }) {
           </Stack>
 
           <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>
-            {token.tokenPrefix ? `${token.tokenPrefix}… · ` : ""}
+            {token.prefix ? `${token.prefix}… · ` : ""}
             Created {formatShortDate(token.createdAt)}
             {token.expiresAt ? ` · Expires ${formatShortDate(token.expiresAt)}` : " · No expiry"}
             {token.lastUsedAt
@@ -193,7 +193,7 @@ export default function TokensPage() {
       return;
     }
     try {
-      await revoke.mutateAsync(token.publicId);
+      await revoke.mutateAsync(token.id);
       toast.success("Token revoked.");
     } catch {
       toast.error("Could not revoke the token.");
@@ -254,7 +254,7 @@ export default function TokensPage() {
         <Stack spacing={1}>
           {tokens.map((token) => (
             <TokenRow
-              key={token.publicId}
+              key={token.id}
               token={token}
               onRevoke={handleRevoke}
               revoking={revoke.isPending}
