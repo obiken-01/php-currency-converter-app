@@ -11,21 +11,37 @@ export default defineConfig({
       // half-updated app against a stale cache, which is genuinely confusing
       // if it happens while a form is open.
       registerType: "prompt",
-      includeAssets: ["icon.svg", "apple-touch-icon.png"],
+      includeAssets: ["icons/*"],
       manifest: {
         name: "Ralphy Tools",
         short_name: "Ralphy",
         description:
           "Currency converter, time tools, shopping list, and work tracking",
-        theme_color: "#1976d2",
-        background_color: "#ffffff",
+        theme_color: "#0B0F14",
+        background_color: "#0B0F14",
         display: "standalone",
         orientation: "portrait",
         start_url: "/",
         scope: "/",
         icons: [
-          { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-          { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+          {
+            src: "/icons/icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/icons/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "/icons/icon-maskable-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable",
+          },
           {
             src: "/icons/icon-maskable-512.png",
             sizes: "512x512",
