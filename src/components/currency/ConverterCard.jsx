@@ -92,7 +92,7 @@ export default function ConverterCard() {
       <CardContent sx={{ px: { xs: 2, sm: 3 } }}>
         <Stack spacing={2.5}>
           <Stack direction="row" alignItems="center" spacing={1}>
-            <img src="/icon.svg" alt="Currency Converter Icon" width={28} />
+            <img src="/icons/favicon.svg" alt="Currency Converter Icon" width={28} />
             <Typography variant="h6" fontWeight={600}>
               Currency Converter
             </Typography>
