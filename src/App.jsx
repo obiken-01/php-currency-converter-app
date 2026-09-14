@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
-import { ThemeProvider, createTheme, CssBaseline, Box } from "@mui/material";
+import { ThemeProvider, CssBaseline, Box } from "@mui/material";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
 import "./App.css";
+import tuiTheme from "./theme/tuiTheme";
 
 import ConverterCard from "./components/currency/ConverterCard";
 import TimePage from "./components/time/TimePage";
@@ -38,32 +38,17 @@ const queryClient = new QueryClient({
 });
 
 function App() {
-  const [darkMode, setDarkMode] = useState(false);
-
-  const theme = useMemo(
-    () =>
-      createTheme({
-        palette: {
-          mode: darkMode ? "dark" : "light"
-        }
-      }),
-    [darkMode]
-  );
-
   // The four site tools share this chrome; /work brings its own.
   const withChrome = (content) => (
     <Box minHeight="100vh" display="flex" flexDirection="column">
-      <TopMenu
-        darkMode={darkMode}
-        onToggleDarkMode={() => setDarkMode(v => !v)}
-      />
+      <TopMenu />
       <Box flexGrow={1}>{content}</Box>
       <Footer />
     </Box>
   );
 
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={tuiTheme}>
       <CssBaseline />
 
       <QueryClientProvider client={queryClient}>

@@ -1,21 +1,20 @@
-import { Stack, Button, Switch, BottomNavigation, BottomNavigationAction, Paper, IconButton } from "@mui/material";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Stack, Box, BottomNavigation, BottomNavigationAction, Paper } from "@mui/material";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme, useMediaQuery } from "@mui/material";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import TimerIcon from "@mui/icons-material/Timer";
-import DarkModeIcon from "@mui/icons-material/DarkMode";
-import LightModeIcon from "@mui/icons-material/LightMode";
+import { tui } from "../../theme/tuiTheme";
 
 const navItems = [
-  { label: "Currency",    path: "/currency",    icon: <CurrencyExchangeIcon /> },
-  { label: "Time",        path: "/time",         icon: <AccessTimeIcon /> },
-  { label: "Shopping",    path: "/shopping",     icon: <ShoppingCartIcon /> },
-  { label: "Work",        path: "/work",         icon: <TimerIcon /> },
+  { key: "1", label: "Currency", path: "/currency", icon: <CurrencyExchangeIcon /> },
+  { key: "2", label: "Time",     path: "/time",      icon: <AccessTimeIcon /> },
+  { key: "3", label: "Shopping", path: "/shopping",  icon: <ShoppingCartIcon /> },
+  { key: "4", label: "Work",     path: "/work",      icon: <TimerIcon /> },
 ];
 
-export default function TopMenu({ darkMode, onToggleDarkMode }) {
+export default function TopMenu() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const location = useLocation();
@@ -49,25 +48,44 @@ export default function TopMenu({ darkMode, onToggleDarkMode }) {
     );
   }
 
-  // ── Desktop — Top Navigation ─────────────────────────────────
+  // ── Desktop — a tab bar in the tmux/htop status-line vein: each item is
+  //    "[n] Label", the active one filled solid rather than underlined. ──
   return (
     <Stack
       direction="row"
-      spacing={1}
-      alignItems="center"
-      sx={{ px: 2, py: 1, borderBottom: "1px solid", borderColor: "divider" }}
+      alignItems="stretch"
+      sx={{ bgcolor: "background.paper", borderBottom: "1px solid", borderColor: "divider" }}
     >
-      {navItems.map((item) => (
-        <Button key={item.path} component={NavLink} to={item.path}>
-          {item.label}
-        </Button>
-      ))}
-
-      <Stack flexGrow={1} />
-
-      <IconButton onClick={onToggleDarkMode} size="small">
-        {darkMode ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
-      </IconButton>
+      {navItems.map((item) => {
+        const active = location.pathname.startsWith(item.path);
+        return (
+          <Box
+            key={item.path}
+            component="button"
+            onClick={() => navigate(item.path)}
+            sx={{
+              font: "inherit",
+              fontSize: "0.8125rem",
+              fontWeight: active ? 700 : 500,
+              letterSpacing: "0.02em",
+              border: "none",
+              borderRight: "1px solid",
+              borderColor: "divider",
+              cursor: "pointer",
+              px: 1.75,
+              py: 1.1,
+              bgcolor: active ? "primary.main" : "transparent",
+              color: active ? tui.bg : "text.secondary",
+              "&:hover": { color: active ? tui.bg : "text.primary" },
+            }}
+          >
+            <Box component="span" sx={{ opacity: active ? 0.75 : 0.55, mr: 0.75 }}>
+              [{item.key}]
+            </Box>
+            {item.label}
+          </Box>
+        );
+      })}
     </Stack>
   );
 }

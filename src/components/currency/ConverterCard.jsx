@@ -85,18 +85,29 @@ export default function ConverterCard() {
       sx={{
         maxWidth: 720,
         mx: "auto",
-        mt: { xs: 2, sm: 4 },
-        borderRadius: 0,
-        backgroundColor: "transparent"
+        mt: { xs: 2, sm: 4 }
       }}>
+      <Stack
+        direction="row"
+        alignItems="center"
+        sx={{
+          px: { xs: 2, sm: 3 },
+          py: 1.25,
+          borderBottom: "1px solid",
+          borderColor: "divider"
+        }}
+      >
+        <Typography
+          variant="overline"
+          color="primary.main"
+          fontWeight={700}
+          sx={{ letterSpacing: "0.08em" }}
+        >
+          Currency Converter
+        </Typography>
+      </Stack>
       <CardContent sx={{ px: { xs: 2, sm: 3 } }}>
         <Stack spacing={2.5}>
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <Typography variant="h6" fontWeight={600}>
-              Currency Converter
-            </Typography>
-          </Stack>
-
           <CurrencySelect
             label="From Currency"
             value={fromCurrency}
