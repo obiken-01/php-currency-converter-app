@@ -155,6 +155,41 @@ const tuiTheme = createTheme({
         root: { color: tui.dim, "&.Mui-selected": { color: tui.accent } },
       },
     },
+    // Every dialog in the Work suite (task/project/token forms, task detail,
+    // token reveal) picks this up for free — none of them override it.
+    MuiDialog: {
+      styleOverrides: {
+        paper: { border: `1px solid ${tui.borderStrong}`, backgroundImage: "none" },
+      },
+    },
+    MuiDialogTitle: {
+      styleOverrides: {
+        root: {
+          fontSize: "0.8125rem",
+          fontWeight: 700,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+          color: tui.accent,
+          borderBottom: `1px solid ${tui.border}`,
+        },
+      },
+    },
+    // Sharp, bracket-adjacent selected state — used by the list/board switch,
+    // the "my tasks / all" filter, and the Gantt day/week/month scale toggle.
+    MuiToggleButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 2,
+          borderColor: tui.borderStrong,
+          textTransform: "none",
+          "&.Mui-selected": {
+            backgroundColor: tui.accent,
+            color: tui.bg,
+            "&:hover": { backgroundColor: tui.accent },
+          },
+        },
+      },
+    },
   },
 });
 
