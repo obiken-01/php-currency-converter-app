@@ -41,7 +41,13 @@ function TasksPageInner() {
         flexWrap="wrap"
         sx={{ mb: 2 }}
       >
-        <Typography variant="h6" fontWeight={700} flexGrow={1}>
+        <Typography
+          variant="overline"
+          color="primary.main"
+          fontWeight={700}
+          flexGrow={1}
+          sx={{ letterSpacing: "0.08em" }}
+        >
           Tasks
         </Typography>
 

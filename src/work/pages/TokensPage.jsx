@@ -203,7 +203,13 @@ export default function TokensPage() {
   return (
     <Box>
       <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2 }}>
-        <Typography variant="h6" fontWeight={700} flexGrow={1}>
+        <Typography
+          variant="overline"
+          color="primary.main"
+          fontWeight={700}
+          flexGrow={1}
+          sx={{ letterSpacing: "0.08em" }}
+        >
           Access tokens
         </Typography>
         <Button

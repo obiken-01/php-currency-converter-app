@@ -85,7 +85,13 @@ function ActiveProjects({ onOpen }) {
 
   return (
     <Box>
-      <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        fontWeight={700}
+        gutterBottom
+        sx={{ letterSpacing: "0.08em", textTransform: "uppercase", display: "block" }}
+      >
         Active projects
       </Typography>
       <Grid container spacing={1.5}>
@@ -156,11 +162,16 @@ export default function WorkDashboardPage() {
 
   const format = (hours) => `${hours.toFixed(2).replace(/\.00$/, "")} h`;
 
+  const sectionLabel = {
+    variant: "caption",
+    color: "text.secondary",
+    fontWeight: 700,
+    sx: { letterSpacing: "0.08em", textTransform: "uppercase" },
+  };
+
   return (
     <Stack spacing={3}>
-      <Typography variant="h6" fontWeight={700}>
-        Today
-      </Typography>
+      <Typography {...sectionLabel}>Today</Typography>
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 6 }}>
@@ -187,10 +198,10 @@ export default function WorkDashboardPage() {
 
       <Box>
         <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-          <Typography variant="subtitle2" fontWeight={700} flexGrow={1}>
+          <Typography {...sectionLabel} sx={{ ...sectionLabel.sx, flexGrow: 1 }}>
             In progress
           </Typography>
-          <Button size="small" onClick={() => navigate("/work/tasks?view=board")}>
+          <Button size="small" variant="outlined" onClick={() => navigate("/work/tasks?view=board")}>
             Open board
           </Button>
         </Stack>
@@ -232,7 +243,7 @@ export default function WorkDashboardPage() {
 
       {dashboard.overdue.length > 0 && (
         <Box>
-          <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          <Typography {...sectionLabel} sx={{ ...sectionLabel.sx, mb: 1, display: "block" }} color="error.main">
             Overdue
           </Typography>
           <Stack spacing={1}>

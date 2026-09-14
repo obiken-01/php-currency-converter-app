@@ -1,4 +1,4 @@
-import { ToggleButton, ToggleButtonGroup, Tooltip } from "@mui/material";
+import { ToggleButton, ToggleButtonGroup } from "@mui/material";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import ViewKanbanIcon from "@mui/icons-material/ViewKanban";
 
@@ -14,16 +14,12 @@ export default function ViewSwitcher({ view, onChange }) {
       value={view}
       onChange={(_, next) => next && onChange(next)}
     >
-      <Tooltip title="List view">
-        <ToggleButton value="list" sx={{ px: 1.25 }}>
-          <ViewListIcon fontSize="small" />
-        </ToggleButton>
-      </Tooltip>
-      <Tooltip title="Board view">
-        <ToggleButton value="board" sx={{ px: 1.25 }}>
-          <ViewKanbanIcon fontSize="small" />
-        </ToggleButton>
-      </Tooltip>
+      <ToggleButton value="list" sx={{ px: 1.25, fontSize: "0.75rem", gap: 0.75 }}>
+        <ViewListIcon sx={{ fontSize: 15 }} /> List
+      </ToggleButton>
+      <ToggleButton value="board" sx={{ px: 1.25, fontSize: "0.75rem", gap: 0.75 }}>
+        <ViewKanbanIcon sx={{ fontSize: 15 }} /> Board
+      </ToggleButton>
     </ToggleButtonGroup>
   );
 }

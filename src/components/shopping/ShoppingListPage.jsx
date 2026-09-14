@@ -129,35 +129,43 @@ export default function ShoppingListPage() {
       sx={{
         maxWidth: 720,
         mx: "auto",
-        mt: { xs: 2, sm: 4 },
-        borderRadius: 0,
-        backgroundColor: "transparent"
+        mt: { xs: 2, sm: 4 }
       }}
     >
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={1}
+        sx={{
+          px: { xs: 2, sm: 3 },
+          py: 1.25,
+          borderBottom: "1px solid",
+          borderColor: "divider"
+        }}
+      >
+        <Typography
+          variant="overline"
+          color="primary.main"
+          fontWeight={700}
+          sx={{ letterSpacing: "0.08em" }}
+        >
+          Shopping List
+          {items.length > 0 ? ` — ${checkedCount}/${items.length} checked` : ""}
+        </Typography>
+
+        <Stack flexGrow={1} />
+
+        {items.length > 0 && (
+          <Tooltip title="Clear all items">
+            <IconButton size="small" onClick={handleClear} color="error">
+              <DeleteSweepIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+      </Stack>
+
       <CardContent sx={{ px: { xs: 2, sm: 3 } }}>
         <Stack spacing={2.5}>
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <Typography variant="h6" fontWeight={600}>
-              Shopping List
-            </Typography>
-
-            {items.length > 0 && (
-              <Typography variant="body2" color="text.secondary">
-                {checkedCount}/{items.length}
-              </Typography>
-            )}
-
-            <Stack flexGrow={1} />
-
-            {items.length > 0 && (
-              <Tooltip title="Clear all items">
-                <IconButton size="small" onClick={handleClear} color="error">
-                  <DeleteSweepIcon />
-                </IconButton>
-              </Tooltip>
-            )}
-          </Stack>
-
           <input
             ref={fileInputRef}
             type="file"

@@ -1,18 +1,5 @@
+/* Background, text color, and font all come from the MUI theme
+   (src/theme/tuiTheme.jsx) via CssBaseline — nothing hardcoded here. */
 body {
-  font-family: Inter, system-ui, sans-serif;
-  background: #f9fafb;
   margin: 0;
-}
-
-.card {
-  background: white;
-  width: 100%;
-  max-width: 360px;
-  padding: 24px;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-}
-
-.subtitle {
-  color: #6b7280;
 }

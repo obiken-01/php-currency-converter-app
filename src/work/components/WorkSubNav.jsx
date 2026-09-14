@@ -1,63 +1,70 @@
-import { Tabs, Tab, Box } from "@mui/material";
+import { Box, Stack } from "@mui/material";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import DashboardIcon from "@mui/icons-material/Dashboard";
-import ListAltIcon from "@mui/icons-material/ListAlt";
-import TaskAltIcon from "@mui/icons-material/TaskAlt";
-import ViewKanbanIcon from "@mui/icons-material/ViewKanban";
-import TimelineIcon from "@mui/icons-material/Timeline";
-import FolderIcon from "@mui/icons-material/Folder";
+import { tui } from "../../theme/tuiTheme";
 
 // `view` distinguishes the two tabs that share the /work/tasks route.
 const TABS = [
-  { label: "Dashboard", path: "/work",           icon: <DashboardIcon fontSize="small" />,  exact: true },
-  { label: "Time Logs", path: "/work/logs",      icon: <ListAltIcon fontSize="small" /> },
-  { label: "Tasks",     path: "/work/tasks",     icon: <TaskAltIcon fontSize="small" />,    view: "list" },
-  { label: "Board",     path: "/work/tasks",     icon: <ViewKanbanIcon fontSize="small" />, view: "board" },
-  { label: "Timeline",  path: "/work/timeline",  icon: <TimelineIcon fontSize="small" /> },
-  { label: "Projects",  path: "/work/projects",  icon: <FolderIcon fontSize="small" /> },
+  { label: "Dashboard", path: "/work",           exact: true },
+  { label: "Time Logs", path: "/work/logs" },
+  { label: "Tasks",     path: "/work/tasks",     view: "list" },
+  { label: "Board",     path: "/work/tasks",     view: "board" },
+  { label: "Timeline",  path: "/work/timeline" },
+  { label: "Projects",  path: "/work/projects" },
 ];
 
-function currentSubNavIndex(pathname, view) {
-  const index = TABS.findIndex((t) => {
-    if (t.exact) return pathname === t.path || pathname === `${t.path}/`;
-    if (!pathname.startsWith(t.path)) return false;
-    return t.view ? t.view === view : true;
-  });
-  return index === -1 ? false : index;
+function isActive(tab, pathname, view) {
+  if (tab.exact) return pathname === tab.path || pathname === `${tab.path}/`;
+  if (!pathname.startsWith(tab.path)) return false;
+  return tab.view ? tab.view === view : true;
 }
 
+// Same "[label]" solid-fill tab-bar convention as the site's TopMenu — this
+// is the Work section's equivalent primary nav, just one level down.
 export default function WorkSubNav() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const view = searchParams.get("view") ?? "list";
 
-  const value = currentSubNavIndex(pathname, view);
-
-  const handleChange = (_, index) => {
-    const tab = TABS[index];
-    navigate(tab.view ? `${tab.path}?view=${tab.view}` : tab.path);
-  };
+  const go = (tab) => navigate(tab.view ? `${tab.path}?view=${tab.view}` : tab.path);
 
   return (
-    <Box sx={{ borderBottom: "1px solid", borderColor: "divider", px: { xs: 1, sm: 2 } }}>
-      <Tabs
-        value={value}
-        onChange={handleChange}
-        variant="scrollable"
-        scrollButtons="auto"
-        allowScrollButtonsMobile
-        sx={{ minHeight: 44, "& .MuiTab-root": { minHeight: 44, textTransform: "none" } }}
-      >
-        {TABS.map((tab) => (
-          <Tab
+    <Stack
+      direction="row"
+      sx={{
+        borderBottom: "1px solid",
+        borderColor: "divider",
+        overflowX: "auto",
+      }}
+    >
+      {TABS.map((tab) => {
+        const active = isActive(tab, pathname, view);
+        return (
+          <Box
             key={`${tab.path}:${tab.view ?? ""}`}
-            label={tab.label}
-            icon={tab.icon}
-            iconPosition="start"
-          />
-        ))}
-      </Tabs>
-    </Box>
+            component="button"
+            onClick={() => go(tab)}
+            sx={{
+              font: "inherit",
+              fontSize: "0.75rem",
+              fontWeight: active ? 700 : 500,
+              letterSpacing: "0.02em",
+              whiteSpace: "nowrap",
+              border: "none",
+              borderRight: "1px solid",
+              borderColor: "divider",
+              cursor: "pointer",
+              px: 1.5,
+              py: 1,
+              bgcolor: active ? "primary.main" : "transparent",
+              color: active ? tui.bg : "text.secondary",
+              "&:hover": { color: active ? tui.bg : "text.primary" },
+            }}
+          >
+            {tab.label}
+          </Box>
+        );
+      })}
+    </Stack>
   );
 }

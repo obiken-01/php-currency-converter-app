@@ -12,8 +12,8 @@ export default function Footer() {
         borderColor: "divider"
       }}
     >
-      <Typography variant="body2" color="text.secondary">
-        Rates provided by{" "}
+      <Typography variant="caption" color="text.secondary" sx={{ letterSpacing: "0.02em" }}>
+        rates:{" "}
         <Link
           href="https://api.frankfurter.dev"
           target="_blank"
@@ -22,8 +22,8 @@ export default function Footer() {
         >
           api.frankfurter.dev
         </Link>
-        {" • "}
-        v{__APP_VERSION__}
+        {" · v"}
+        {__APP_VERSION__}
       </Typography>
     </Box>
   );

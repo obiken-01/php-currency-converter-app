@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
-import { ThemeProvider, createTheme, CssBaseline, Box } from "@mui/material";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ThemeProvider, CssBaseline, Box } from "@mui/material";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
 import "./App.css";
+import tuiTheme from "./theme/tuiTheme";
 
 import ConverterCard from "./components/currency/ConverterCard";
 import TimePage from "./components/time/TimePage";
@@ -37,33 +37,28 @@ const queryClient = new QueryClient({
   },
 });
 
-function App() {
-  const [darkMode, setDarkMode] = useState(false);
-
-  const theme = useMemo(
-    () =>
-      createTheme({
-        palette: {
-          mode: darkMode ? "dark" : "light"
-        }
-      }),
-    [darkMode]
-  );
-
-  // The four site tools share this chrome; /work brings its own.
-  const withChrome = (content) => (
+// The four site tools share this chrome; /work brings its own. A real
+// component (not a plain helper function) so it can call useLocation() —
+// the transition wrapper is keyed by pathname so it actually remounts on
+// every nav-tab click, rather than just having its child swap in place
+// (which a static wrapper element would do silently, without the CSS
+// "on mount" animation ever re-firing).
+function SiteChrome({ children }) {
+  const location = useLocation();
+  return (
     <Box minHeight="100vh" display="flex" flexDirection="column">
-      <TopMenu
-        darkMode={darkMode}
-        onToggleDarkMode={() => setDarkMode(v => !v)}
-      />
-      <Box flexGrow={1}>{content}</Box>
+      <TopMenu />
+      <Box key={location.pathname} flexGrow={1} className="page-transition">
+        {children}
+      </Box>
       <Footer />
     </Box>
   );
+}
 
+function App() {
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={tuiTheme}>
       <CssBaseline />
 
       <QueryClientProvider client={queryClient}>
@@ -77,10 +72,10 @@ function App() {
             <Routes>
 
               {/* ── Existing tools (with TopMenu + Footer) ── */}
-              <Route path="/"         element={withChrome(<Navigate to="/currency" replace />)} />
-              <Route path="/currency" element={withChrome(<ConverterCard />)} />
-              <Route path="/time"     element={withChrome(<TimePage />)} />
-              <Route path="/shopping" element={withChrome(<ShoppingListPage />)} />
+              <Route path="/"         element={<SiteChrome><Navigate to="/currency" replace /></SiteChrome>} />
+              <Route path="/currency" element={<SiteChrome><ConverterCard /></SiteChrome>} />
+              <Route path="/time"     element={<SiteChrome><TimePage /></SiteChrome>} />
+              <Route path="/shopping" element={<SiteChrome><ShoppingListPage /></SiteChrome>} />
 
               {/* ── Work (own layout, no site TopMenu/Footer) ── */}
               <Route path="/work/login" element={<WorkLoginPage />} />
