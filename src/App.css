@@ -6,6 +6,21 @@
      a hardcoded color here would fight the terminal palette. */
 }
 
+/* Page-to-page navigation: each route's content is a freshly-mounted
+   element, so this replays automatically on every nav-tab click without
+   any router-transition library. Kept quick and small — a terminal
+   redrawing its screen, not a crossfade. */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .page-transition {
+    animation: page-enter 180ms ease-out;
+  }
+}
+
 @media (max-width: 600px) {
   body {
     padding-bottom: 56px;

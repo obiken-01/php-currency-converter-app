@@ -21,7 +21,6 @@ export default function WorkLoginPage() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -45,10 +44,7 @@ export default function WorkLoginPage() {
     <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
 
       {/* Top navigation */}
-      <TopMenu
-        darkMode={darkMode}
-        onToggleDarkMode={() => setDarkMode(v => !v)}
-      />
+      <TopMenu />
 
       {/* Login form centered below nav */}
       <Box sx={{
@@ -63,21 +59,25 @@ export default function WorkLoginPage() {
           {/* Header */}
           <Stack alignItems="center" spacing={1} sx={{ mb: 4 }}>
             <Box sx={{
-              width: 48,
-              height: 48,
-              borderRadius: 2,
-              bgcolor: "primary.main",
+              width: 44,
+              height: 44,
+              border: "1px solid",
+              borderColor: "primary.main",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
             }}>
-              <AccessTimeIcon sx={{ color: "white" }} />
+              <AccessTimeIcon sx={{ color: "primary.main" }} />
             </Box>
-            <Typography variant="h6" fontWeight={700}>
-              Work
+            <Typography
+              variant="subtitle1"
+              fontWeight={700}
+              sx={{ letterSpacing: "0.08em" }}
+            >
+              WORK
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Sign in to your account
+            <Typography variant="caption" color="text.secondary">
+              sign in to your account
             </Typography>
           </Stack>
 

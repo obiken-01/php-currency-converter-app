@@ -1,7 +1,7 @@
 // src/work/components/WorkLayout.jsx
 
 import { useEffect, useState } from "react";
-import { useNavigate, Outlet } from "react-router-dom";
+import { useLocation, useNavigate, Outlet } from "react-router-dom";
 import {
   AppBar,
   Box,
@@ -35,6 +35,7 @@ import WorkBottomNav from "./WorkBottomNav";
  */
 export default function WorkLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   // Seeded from the last successful check so an offline start has a name to
@@ -101,7 +102,13 @@ export default function WorkLayout() {
     <Box sx={{ minHeight: "100vh" }}>
 
       {/* Top bar */}
-      <AppBar position="static" elevation={0} variant="outlined" color="inherit">
+      <AppBar
+        position="static"
+        elevation={0}
+        variant="outlined"
+        color="inherit"
+        sx={{ bgcolor: "background.paper" }}
+      >
         <Toolbar variant="dense">
           {/* Mobile swaps the site bottom nav for the module one, so this is
               the only way back out to the other tools. */}
@@ -124,9 +131,9 @@ export default function WorkLayout() {
             sx={{ cursor: "pointer" }}
             onClick={() => navigate("/work")}
           >
-            <TimerIcon fontSize="small" />
-            <Typography variant="subtitle1" fontWeight={700}>
-              Work
+            <TimerIcon fontSize="small" sx={{ color: "primary.main" }} />
+            <Typography variant="subtitle1" fontWeight={700} sx={{ letterSpacing: "0.06em" }}>
+              WORK
             </Typography>
           </Stack>
 
@@ -182,8 +189,12 @@ export default function WorkLayout() {
         {!isMobile && <WorkSubNav />}
       </AppBar>
 
-      {/* Page content */}
+      {/* Page content — keyed by pathname (not search params) so switching
+          the Tasks list/board query-string view doesn't replay the
+          transition, but navigating to a genuinely different page does. */}
       <Box
+        key={location.pathname}
+        className="page-transition"
         sx={{
           maxWidth: 1400,
           mx: "auto",
