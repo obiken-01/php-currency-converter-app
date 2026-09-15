@@ -43,12 +43,27 @@ const queryClient = new QueryClient({
 // every nav-tab click, rather than just having its child swap in place
 // (which a static wrapper element would do silently, without the CSS
 // "on mount" animation ever re-firing).
-function SiteChrome({ children }) {
+function SiteChrome({ children, fillHeight = false }) {
   const location = useLocation();
   return (
-    <Box minHeight="100vh" display="flex" flexDirection="column">
+    <Box
+      minHeight="100vh"
+      height={fillHeight ? { xs: "auto", sm: "100vh" } : "auto"}
+      display="flex"
+      flexDirection="column"
+    >
       <TopMenu />
-      <Box key={location.pathname} flexGrow={1} className="page-transition">
+      <Box
+        key={location.pathname}
+        flexGrow={1}
+        className="page-transition"
+        sx={fillHeight ? {
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+          overflow: { xs: "visible", sm: "hidden" }
+        } : undefined}
+      >
         {children}
       </Box>
       <Footer />
@@ -73,7 +88,7 @@ function App() {
 
               {/* ── Existing tools (with TopMenu + Footer) ── */}
               <Route path="/"         element={<SiteChrome><Navigate to="/currency" replace /></SiteChrome>} />
-              <Route path="/currency" element={<SiteChrome><ConverterCard /></SiteChrome>} />
+              <Route path="/currency" element={<SiteChrome fillHeight><ConverterCard /></SiteChrome>} />
               <Route path="/time"     element={<SiteChrome><TimePage /></SiteChrome>} />
               <Route path="/shopping" element={<SiteChrome><ShoppingListPage /></SiteChrome>} />
 

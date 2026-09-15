@@ -15,6 +15,7 @@ import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import { saveTokens } from "../api/workApi";
 import authApi from "../api/authApi";
 import TopMenu from "../../components/common/TopMenu";
+import Footer from "../../components/Footer";
 
 export default function WorkLoginPage() {
   const navigate = useNavigate();
@@ -132,6 +133,8 @@ export default function WorkLoginPage() {
 
         </Box>
       </Box>
+
+      <Footer />
     </Box>
   );
 }

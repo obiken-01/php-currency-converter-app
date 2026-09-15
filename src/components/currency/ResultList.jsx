@@ -22,7 +22,7 @@ export default function ResultList({
   if (toCurrencies.length === 0) {
     return (
       <Typography variant="body2" color="text.secondary">
-        + choose a currency above to see results
+        loading currencies…
       </Typography>
     );
   }

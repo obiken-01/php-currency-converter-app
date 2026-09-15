@@ -1,21 +1,24 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Card,
   CardContent,
   Typography,
   TextField,
   Divider,
-  Stack
+  Stack,
+  Box
 } from "@mui/material";
 
 import CurrencySelect from "./CurrencySelect";
 import ResultList from "./ResultList";
 
+// Kept at the top of the comparison list, in this order, for quick reference.
+const PRIORITY_CURRENCIES = ["PHP", "USD", "JPY", "SGD", "HKD", "EUR"];
+
 export default function ConverterCard() {
   const [currencies, setCurrencies] = useState({});
   const [fromCurrency, setFromCurrency] = useState("USD");
   const [amount, setAmount] = useState(1000);
-  const [toCurrencies, setToCurrencies] = useState(["PHP"]);
   const [rates, setRates] = useState({});
   const [loading, setLoading] = useState(false);
 
@@ -36,38 +39,27 @@ export default function ConverterCard() {
     }
   }, [currencies]);
 
-  // Ensure base is not in targets
-  useEffect(() => {
-    setToCurrencies((prev) =>
-      prev.filter((code) => code !== fromCurrency)
+  // Every other supported currency, priority codes first (in PRIORITY_CURRENCIES
+  // order, minus whichever is currently selected as "From"), then the rest
+  // alphabetically.
+  const toCurrencies = useMemo(() => {
+    const codes = Object.keys(currencies).filter(
+      (code) => code !== fromCurrency
     );
-  }, [fromCurrency]);
+    const priority = PRIORITY_CURRENCIES.filter((code) => codes.includes(code));
+    const rest = codes
+      .filter((code) => !priority.includes(code))
+      .sort();
+    return [...priority, ...rest];
+  }, [currencies, fromCurrency]);
 
-  function addCurrency(currency) {
-    if (!currency) return;
-    if (!toCurrencies.includes(currency)) {
-      setToCurrencies([...toCurrencies, currency]);
-    }
-  }
-
-  // Fetch rates
+  // Fetch rates for every currency at once
   useEffect(() => {
     async function fetchRates() {
-      // Exclude base currency from target symbols to avoid API error
-      const targetSymbols = toCurrencies.filter(
-        (code) => code !== fromCurrency
-      );
-
-      if (targetSymbols.length === 0) {
-        setRates({});
-        return;
-      }
-
       setLoading(true);
       try {
-        const symbols = targetSymbols.join(",");
         const resp = await fetch(
-          `https://api.frankfurter.dev/v1/latest?base=${fromCurrency}&symbols=${symbols}`
+          `https://api.frankfurter.dev/v1/latest?base=${fromCurrency}`
         );
         const data = await resp.json();
         setRates(data.rates || {});
@@ -77,15 +69,20 @@ export default function ConverterCard() {
     }
 
     fetchRates();
-  }, [fromCurrency, toCurrencies]);
+  }, [fromCurrency]);
 
   return (
     <Card
       elevation={0}
       sx={{
         maxWidth: 720,
+        width: "100%",
         mx: "auto",
-        mt: { xs: 2, sm: 4 }
+        my: { xs: 2, sm: 4 },
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+        flex: { sm: 1 }
       }}>
       <Stack
         direction="row"
@@ -106,8 +103,16 @@ export default function ConverterCard() {
           Currency Converter
         </Typography>
       </Stack>
-      <CardContent sx={{ px: { xs: 2, sm: 3 } }}>
-        <Stack spacing={2.5}>
+      <CardContent
+        sx={{
+          px: { xs: 2, sm: 3 },
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+          flex: { sm: 1 }
+        }}
+      >
+        <Stack spacing={2.5} sx={{ minHeight: 0, flex: { sm: 1 } }}>
           <CurrencySelect
             label="From Currency"
             value={fromCurrency}
@@ -124,27 +129,23 @@ export default function ConverterCard() {
             fullWidth
           />
 
-          <CurrencySelect
-            label="To Currency"
-            value=""
-            options={Object.fromEntries(
-              Object.entries(currencies).filter(
-                ([code]) =>
-                  code !== fromCurrency &&
-                  !toCurrencies.includes(code)
-              )
-            )}
-            onChange={addCurrency}
-          />
-
           <Divider />
 
-          <ResultList
-            amount={amount}
-            toCurrencies={toCurrencies}
-            rates={rates}
-            loading={loading}
-          />
+          <Box
+            sx={{
+              maxHeight: { xs: "50vh", sm: "none" },
+              minHeight: { sm: 0 },
+              flex: { sm: 1 },
+              overflowY: "auto"
+            }}
+          >
+            <ResultList
+              amount={amount}
+              toCurrencies={toCurrencies}
+              rates={rates}
+              loading={loading}
+            />
+          </Box>
         </Stack>
       </CardContent>
     </Card>
