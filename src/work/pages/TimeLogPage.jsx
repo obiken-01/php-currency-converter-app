@@ -285,9 +285,9 @@ export default function TimeLogPage() {
           <Stack
             component="form"
             onSubmit={handleSubmit}
-            direction={{ xs: "column", sm: "row" }}
+            direction={{ xs: "column", md: "row" }}
             spacing={2}
-            alignItems={{ sm: "flex-end" }}
+            alignItems={{ md: "flex-end" }}
           >
             <TextField
                 label="Task Description *"
@@ -298,7 +298,7 @@ export default function TimeLogPage() {
                 multiline
                 minRows={1}
                 maxRows={4}
-                sx={{ flex: 3 }}
+                sx={{ flex: 3, minWidth: 220 }}
                 required
                 />
             <TextField
@@ -309,7 +309,7 @@ export default function TimeLogPage() {
               placeholder="e.g. 1.5"
               size="small"
               inputProps={{ step: "0.5", min: "0.5" }}
-              sx={{ flex: 1 }}
+              sx={{ flex: 1, minWidth: 130 }}
               required
             />
             <TextField
@@ -318,7 +318,7 @@ export default function TimeLogPage() {
               value={form.loggedAt}
               onChange={e => setForm({ ...form, loggedAt: e.target.value })}
               size="small"
-              sx={{ flex: 2 }}
+              sx={{ flex: 2, minWidth: 200 }}
               InputLabelProps={{ shrink: true }}
               required
             />
@@ -329,7 +329,7 @@ export default function TimeLogPage() {
               startIcon={submitting
                 ? <CircularProgress size={16} color="inherit" />
                 : <AddIcon />}
-              sx={{ flexShrink: 0 }}
+              sx={{ flexShrink: 0, width: { xs: "100%", md: "auto" } }}
             >
               {submitting ? "Saving..." : "Add Log"}
             </Button>

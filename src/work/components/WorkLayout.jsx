@@ -28,6 +28,7 @@ import useOutbox from "../hooks/useOutbox";
 import authApi from "../api/authApi";
 import WorkSubNav from "./WorkSubNav";
 import WorkBottomNav from "./WorkBottomNav";
+import Footer from "../../components/Footer";
 
 /**
  * Guards everything nested under /work. The module keeps its own AppBar
@@ -203,6 +204,10 @@ export default function WorkLayout() {
         }}
       >
         <Outlet />
+      </Box>
+
+      <Box sx={{ pb: isMobile ? 7 : 0 }}>
+        <Footer />
       </Box>
 
       {isMobile && <WorkBottomNav />}
