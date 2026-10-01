@@ -369,6 +369,8 @@ export default function TimeLogPage() {
             spacing={2}
             alignItems={{ sm: "flex-end" }}
             flexWrap="wrap"
+            useFlexGap
+            sx={{ minWidth: 0 }}
           >
             <TextField
               label="From"
@@ -377,7 +379,7 @@ export default function TimeLogPage() {
               onChange={e => setFilters({ ...filters, from: e.target.value })}
               size="small"
               InputLabelProps={{ shrink: true }}
-              sx={{ flex: 1, minWidth: 140 }}
+              sx={{ flex: { sm: 1 }, minWidth: { sm: 140 }, width: { xs: "100%", sm: "auto" } }}
             />
             <TextField
               label="To"
@@ -386,7 +388,7 @@ export default function TimeLogPage() {
               onChange={e => setFilters({ ...filters, to: e.target.value })}
               size="small"
               InputLabelProps={{ shrink: true }}
-              sx={{ flex: 1, minWidth: 140 }}
+              sx={{ flex: { sm: 1 }, minWidth: { sm: 140 }, width: { xs: "100%", sm: "auto" } }}
             />
             <TextField
               label="Search description"
@@ -394,9 +396,15 @@ export default function TimeLogPage() {
               onChange={e => setFilters({ ...filters, search: e.target.value })}
               placeholder="e.g. standup"
               size="small"
-              sx={{ flex: 2, minWidth: 180 }}
+              sx={{ flex: { sm: 2 }, minWidth: { sm: 180 }, width: { xs: "100%", sm: "auto" } }}
             />
-            <Stack direction="row" spacing={2} sx={{ flexShrink: 0 }}>
+            <Stack
+              direction="row"
+              spacing={2}
+              useFlexGap
+              flexWrap="wrap"
+              sx={{ minWidth: 0, maxWidth: "100%" }}
+            >
               <Button variant="contained" onClick={handleApplyFilters}>
                 Apply
               </Button>
