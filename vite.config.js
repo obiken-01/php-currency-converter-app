@@ -17,8 +17,8 @@ export default defineConfig({
         short_name: "Ralphy",
         description:
           "Currency converter, time tools, shopping list, and work tracking",
-        theme_color: "#0B0F14",
-        background_color: "#0B0F14",
+        theme_color: "#000000",
+        background_color: "#000000",
         display: "standalone",
         orientation: "portrait",
         start_url: "/",

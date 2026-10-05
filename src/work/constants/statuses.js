@@ -8,12 +8,12 @@
 // neutral/inactive.
 
 export const WORK_ITEM_STATUSES = [
-  { value: "Backlog",    label: "Backlog",     color: "#7C8A99", order: 0 },
-  { value: "Todo",       label: "To Do",       color: "#7C8A99", order: 1 },
+  { value: "Backlog",    label: "Backlog",     color: "#A1A1A1", order: 0 },
+  { value: "Todo",       label: "To Do",       color: "#A1A1A1", order: 1 },
   { value: "InProgress", label: "In Progress", color: "#5BC9D9", order: 2 },
   { value: "Blocked",    label: "Blocked",     color: "#F2685F", order: 3 },
   { value: "Done",       label: "Done",        color: "#39D97A", order: 4 },
-  { value: "Cancelled",  label: "Cancelled",   color: "#7C8A99", order: 5 },
+  { value: "Cancelled",  label: "Cancelled",   color: "#A1A1A1", order: 5 },
 ];
 
 export const BOARD_STATUSES = WORK_ITEM_STATUSES.filter(
@@ -22,7 +22,7 @@ export const BOARD_STATUSES = WORK_ITEM_STATUSES.filter(
 
 export const PRIORITIES = [
   { value: "Low",    label: "Low",    color: "#5BC9D9", order: 0 },
-  { value: "Normal", label: "Normal", color: "#7C8A99", order: 1 },
+  { value: "Normal", label: "Normal", color: "#A1A1A1", order: 1 },
   { value: "High",   label: "High",   color: "#E8B23D", order: 2 },
   { value: "Urgent", label: "Urgent", color: "#F2685F", order: 3 },
 ];
@@ -49,8 +49,8 @@ export const PROJECT_STATUSES = [
   { value: "Planned",   label: "Planning",  color: "#5BC9D9" },
   { value: "Active",    label: "Active",    color: "#39D97A" },
   { value: "OnHold",    label: "On Hold",   color: "#E8B23D" },
-  { value: "Completed", label: "Completed", color: "#7C8A99" },
-  { value: "Cancelled", label: "Archived",  color: "#7C8A99" },
+  { value: "Completed", label: "Completed", color: "#A1A1A1" },
+  { value: "Cancelled", label: "Archived",  color: "#A1A1A1" },
 ];
 
 export const getProjectStatus = (v) =>
