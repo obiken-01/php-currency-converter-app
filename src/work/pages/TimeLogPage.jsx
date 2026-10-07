@@ -34,6 +34,7 @@ import { toLocalDateTimeString } from "../utils/dates";
 import { qk } from "../constants/queryKeys";
 import WorkItemPicker from "../components/tasks/WorkItemPicker";
 import { useWorkItem } from "../hooks/useWorkItems";
+import { linkedItemOf, linkedItemTitle } from "../utils/workItem";
 
 const DEFAULT_FORM = {
   taskDescription: "",
@@ -50,13 +51,6 @@ const DEFAULT_FILTERS = {
   page: 1,
   pageSize: 20,
 };
-
-/**
- * The API returns the link flat (workItemId + workItemTitle), not as a nested
- * object. Rebuild the picker's { publicId, title } shape from it.
- */
-const linkedItem = (log) =>
-  log.workItemId ? { publicId: log.workItemId, title: log.workItemTitle ?? "" } : null;
 
 export default function TimeLogPage() {
   const [logs,          setLogs]          = useState([]);
@@ -183,7 +177,7 @@ export default function TimeLogPage() {
   // ── Edit log ───────────────────────────────────────────────────
   const startEdit = (log) => {
     setEditingId(log.id);
-    setEditWorkItem(linkedItem(log));
+    setEditWorkItem(linkedItemOf(log));
     setEditForm({
       taskDescription: log.taskDescription,
       duration:        log.duration,
@@ -200,6 +194,8 @@ export default function TimeLogPage() {
         workItemId:      editWorkItem?.publicId ?? null,
       });
       setEditingId(null);
+      // The task it left needs its totals refreshed as much as the one it joined.
+      invalidateLinkedTask(logs.find((l) => l.id === id)?.workItemId);
       invalidateLinkedTask(editWorkItem?.publicId);
       fetchLogs();
     } catch {
@@ -561,7 +557,7 @@ export default function TimeLogPage() {
                             <TableCell>
                               {log.workItemId ? (
                                 <Chip
-                                  label={log.workItemTitle}
+                                  label={linkedItemTitle(log)}
                                   size="small"
                                   variant="outlined"
                                   sx={{ maxWidth: 220 }}
