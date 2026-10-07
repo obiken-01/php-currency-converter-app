@@ -44,3 +44,17 @@ export const toWorkItemDto = (form, { isEdit = false } = {}) => {
 
   return dto;
 };
+
+const UNKNOWN_TASK = "(unknown task)";
+
+/** Shown when a log has a task id but no title, e.g. the task was deleted. */
+export const linkedItemTitle = (log) => log?.workItemTitle || UNKNOWN_TASK;
+
+/**
+ * A time log comes back flat: workItemId + workItemTitle. WorkItemPicker wants
+ * an item with publicId and title, so rebuild one. Null for an unlinked log.
+ */
+export const linkedItemOf = (log) =>
+  log?.workItemId
+    ? { publicId: log.workItemId, title: linkedItemTitle(log) }
+    : null;

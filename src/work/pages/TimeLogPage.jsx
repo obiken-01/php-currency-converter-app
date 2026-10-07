@@ -34,6 +34,7 @@ import { toLocalDateTimeString } from "../utils/dates";
 import { qk } from "../constants/queryKeys";
 import WorkItemPicker from "../components/tasks/WorkItemPicker";
 import { useWorkItem } from "../hooks/useWorkItems";
+import { linkedItemOf, linkedItemTitle } from "../utils/workItem";
 
 const DEFAULT_FORM = {
   taskDescription: "",
@@ -166,7 +167,7 @@ export default function TimeLogPage() {
     if (!window.confirm("Delete this time log?")) return;
     try {
       await timeLogsApi.remove(log.id);
-      invalidateLinkedTask(log.workItem?.publicId);
+      invalidateLinkedTask(log.workItemId);
       fetchLogs();
     } catch {
       setError("Failed to delete log.");
@@ -176,7 +177,7 @@ export default function TimeLogPage() {
   // ── Edit log ───────────────────────────────────────────────────
   const startEdit = (log) => {
     setEditingId(log.id);
-    setEditWorkItem(log.workItem ?? null);
+    setEditWorkItem(linkedItemOf(log));
     setEditForm({
       taskDescription: log.taskDescription,
       duration:        log.duration,
@@ -193,6 +194,8 @@ export default function TimeLogPage() {
         workItemId:      editWorkItem?.publicId ?? null,
       });
       setEditingId(null);
+      // The task it left needs its totals refreshed as much as the one it joined.
+      invalidateLinkedTask(logs.find((l) => l.id === id)?.workItemId);
       invalidateLinkedTask(editWorkItem?.publicId);
       fetchLogs();
     } catch {
@@ -552,9 +555,9 @@ export default function TimeLogPage() {
                               </Typography>
                             </TableCell>
                             <TableCell>
-                              {log.workItem ? (
+                              {log.workItemId ? (
                                 <Chip
-                                  label={log.workItem.title}
+                                  label={linkedItemTitle(log)}
                                   size="small"
                                   variant="outlined"
                                   sx={{ maxWidth: 220 }}
