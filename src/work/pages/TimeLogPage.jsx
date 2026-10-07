@@ -51,6 +51,13 @@ const DEFAULT_FILTERS = {
   pageSize: 20,
 };
 
+/**
+ * The API returns the link flat (workItemId + workItemTitle), not as a nested
+ * object. Rebuild the picker's { publicId, title } shape from it.
+ */
+const linkedItem = (log) =>
+  log.workItemId ? { publicId: log.workItemId, title: log.workItemTitle ?? "" } : null;
+
 export default function TimeLogPage() {
   const [logs,          setLogs]          = useState([]);
   const [totalCount,    setTotalCount]    = useState(0);
@@ -166,7 +173,7 @@ export default function TimeLogPage() {
     if (!window.confirm("Delete this time log?")) return;
     try {
       await timeLogsApi.remove(log.id);
-      invalidateLinkedTask(log.workItem?.publicId);
+      invalidateLinkedTask(log.workItemId);
       fetchLogs();
     } catch {
       setError("Failed to delete log.");
@@ -176,7 +183,7 @@ export default function TimeLogPage() {
   // ── Edit log ───────────────────────────────────────────────────
   const startEdit = (log) => {
     setEditingId(log.id);
-    setEditWorkItem(log.workItem ?? null);
+    setEditWorkItem(linkedItem(log));
     setEditForm({
       taskDescription: log.taskDescription,
       duration:        log.duration,
@@ -552,9 +559,9 @@ export default function TimeLogPage() {
                               </Typography>
                             </TableCell>
                             <TableCell>
-                              {log.workItem ? (
+                              {log.workItemId ? (
                                 <Chip
-                                  label={log.workItem.title}
+                                  label={log.workItemTitle}
                                   size="small"
                                   variant="outlined"
                                   sx={{ maxWidth: 220 }}
