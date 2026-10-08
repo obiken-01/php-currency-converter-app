@@ -1,6 +1,8 @@
-import { Box, Card, IconButton, Stack, Tooltip, Typography } from "@mui/material";
+import { Box, Card, Chip, IconButton, Stack, Tooltip, Typography } from "@mui/material";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import MoreTimeIcon from "@mui/icons-material/MoreTime";
 import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
+import { alpha } from "@mui/material/styles";
 import { getPriority } from "../../constants/statuses";
 import { assigneeOf } from "../../utils/workItem";
 import PriorityIcon from "../common/PriorityIcon";
@@ -146,6 +148,21 @@ export default function TaskCard({
             </Stack>
           )}
           <Box flexGrow={1} />
+          {task.status === "Done" && (
+            <Chip
+              icon={<CheckCircleIcon sx={{ fontSize: 14 }} />}
+              label="Completed"
+              size="small"
+              sx={{
+                borderRadius: 1,
+                fontWeight: 600,
+                bgcolor: (t) => alpha(t.palette.success.main, 0.14),
+                color: "success.main",
+                "& .MuiChip-label": { px: 0.75 },
+                "& .MuiChip-icon": { ml: 0.75, mr: -0.25, color: "inherit" },
+              }}
+            />
+          )}
           <AssigneeAvatar user={assigneeOf(task)} size={22} />
         </Stack>
 
