@@ -30,6 +30,7 @@ import { BOARD_STATUSES, getProjectStatus, WORK_ITEM_STATUSES } from "../constan
 import { useDashboard } from "../hooks/useDashboard";
 import { useProjects } from "../hooks/useProjects";
 import { useSetWorkItemStatus } from "../hooks/useWorkItems";
+import { projectProgress } from "../utils/project";
 
 const ACTIVE_PROJECT_STATUSES = ["Planning", "Active"];
 
@@ -105,7 +106,7 @@ function ActiveProjects({ onOpen }) {
       <Grid container spacing={1.5}>
         {projects.map((project) => {
           const status = getProjectStatus(project.status);
-          const progress = Math.max(0, Math.min(100, Number(project.progressPercent) || 0));
+          const progress = projectProgress(project);
 
           return (
             <Grid key={project.publicId} size={{ xs: 12, sm: 6, md: 4 }}>
