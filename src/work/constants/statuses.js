@@ -33,7 +33,7 @@ export const getStatus = (v) =>
 export const getPriority = (v) =>
   PRIORITIES.find((p) => p.value === v) ?? PRIORITIES[1];
 
-/** Statuses that count as finished — used for overdue and progress logic. */
+/** Statuses that count as finished — used for progress logic. */
 export const CLOSED_STATUSES = ["Done", "Cancelled"];
 export const isClosed = (v) => CLOSED_STATUSES.includes(v);
 
