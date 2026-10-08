@@ -4,6 +4,9 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
+  FormControl,
+  InputLabel,
   Grid,
   LinearProgress,
   MenuItem,
@@ -16,6 +19,9 @@ import {
 import { alpha } from "@mui/material/styles";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import TimelapseIcon from "@mui/icons-material/Timelapse";
+import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import TaskCard from "../components/tasks/TaskCard";
 import TaskDetailModal from "../components/tasks/TaskDetailModal";
 import { getProjectStatus, WORK_ITEM_STATUSES } from "../constants/statuses";
@@ -133,21 +139,63 @@ function ActiveProjects({ onOpen }) {
   );
 }
 
+const COLUMNS = [
+  { key: "inProgress", label: "In progress", tone: "info",    icon: <PlayCircleOutlineIcon fontSize="small" />,   empty: "Nothing in progress. Pick something off the board." },
+  { key: "overdue",    label: "Overdue",     tone: "error",   icon: <WarningAmberIcon fontSize="small" />,        empty: "Nothing overdue." },
+  { key: "completed",  label: "Completed",   tone: "success", icon: <CheckCircleOutlineIcon fontSize="small" />,  empty: "No completed tasks yet." },
+];
+
+function Column({ column, tasks, count, children }) {
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 1.5, height: "100%" }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.25 }}>
+        <Box sx={{ color: `${column.tone}.main`, display: "flex" }}>{column.icon}</Box>
+        <Typography variant="body2" fontWeight={700} sx={{ flexGrow: 1 }}>
+          {column.label}
+        </Typography>
+        <Chip
+          size="small"
+          label={count}
+          sx={{
+            height: 20,
+            fontWeight: 700,
+            bgcolor: (t) => alpha(t.palette[column.tone].main, 0.16),
+            color: `${column.tone}.main`,
+          }}
+        />
+      </Stack>
+      {tasks.length === 0 ? (
+        <Typography variant="body2" color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
+          {column.empty}
+        </Typography>
+      ) : (
+        <Stack spacing={1}>{children}</Stack>
+      )}
+    </Paper>
+  );
+}
+
 export default function WorkDashboardPage() {
   const navigate = useNavigate();
-  const dashboard = useDashboard();
+  const [projectId, setProjectId] = useState("");
+  const [visible, setVisible] = useState(COLUMNS.map((c) => c.key));
+  const dashboard = useDashboard(projectId);
+  const { data: projectData } = useProjects();
   const setStatus = useSetWorkItemStatus();
   const [openTaskId, setOpenTaskId] = useState(null);
 
+  const projectList = projectData?.items ?? projectData ?? [];
   const logTimeFor = (task) => navigate(`/work/logs?workItemId=${task.publicId}`);
+  const toggle = (key) =>
+    setVisible((v) => (v.includes(key) ? v.filter((k) => k !== key) : [...v, key]));
 
   if (dashboard.isPending) {
     return (
       <Stack spacing={2}>
         <Grid container spacing={2}>
-        {Array.from({ length: 2 }, (_, i) => (
-            <Grid key={i} size={{ xs: 12, sm: 6 }}>
-              <Skeleton variant="rounded" height={92} />
+          {Array.from({ length: 5 }, (_, i) => (
+            <Grid key={i} size={{ xs: 6, md: "grow" }}>
+              <Skeleton variant="rounded" height={80} />
             </Grid>
           ))}
         </Grid>
@@ -161,28 +209,22 @@ export default function WorkDashboardPage() {
   }
 
   const format = (hours) => `${hours.toFixed(2).replace(/\.00$/, "")} h`;
-
-  const sectionLabel = {
-    variant: "caption",
-    color: "text.secondary",
-    fontWeight: 700,
-    sx: { letterSpacing: "0.08em", textTransform: "uppercase" },
-  };
+  const { counts } = dashboard;
+  const shown = COLUMNS.filter((c) => visible.includes(c.key));
 
   return (
     <Stack spacing={3}>
-      <Typography {...sectionLabel}>Today</Typography>
-
+      {/* Summary row */}
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 6 }}>
+        <Grid size={{ xs: 6, md: "grow" }}>
           <StatCard
             icon={<AccessTimeIcon fontSize="small" />}
-            label="Hours logged today"
+            label="Hours today"
             value={format(dashboard.hoursToday)}
             onClick={() => navigate("/work/logs")}
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6 }}>
+        <Grid size={{ xs: 6, md: "grow" }}>
           <StatCard
             icon={<TimelapseIcon fontSize="small" />}
             label="Hours this cutoff"
@@ -192,71 +234,91 @@ export default function WorkDashboardPage() {
             onClick={() => navigate("/work/logs")}
           />
         </Grid>
+        {COLUMNS.map((c) => (
+          <Grid key={c.key} size={{ xs: 6, md: "grow" }}>
+            <StatCard
+              icon={c.icon}
+              label={c.label}
+              value={counts[c.key]}
+              tone={c.tone}
+              onClick={() => setVisible([c.key])}
+            />
+          </Grid>
+        ))}
       </Grid>
 
       <ActiveProjects onOpen={(publicId) => navigate(`/work/projects/${publicId}`)} />
 
-      <Box>
-        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-          <Typography {...sectionLabel} sx={{ ...sectionLabel.sx, flexGrow: 1 }}>
-            In progress
-          </Typography>
-          <Button size="small" variant="outlined" onClick={() => navigate("/work/tasks?view=board")}>
-            Open board
-          </Button>
+      {/* Filters: project + status */}
+      <Stack direction="row" flexWrap="wrap" gap={1.5} alignItems="center">
+        <FormControl size="small" sx={{ minWidth: 200 }}>
+          <InputLabel id="dash-project">Project</InputLabel>
+          <Select
+            labelId="dash-project"
+            label="Project"
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+          >
+            <MenuItem value="">All projects</MenuItem>
+            {projectList.map((p) => (
+              <MenuItem key={p.publicId} value={p.publicId}>{p.name}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <Stack direction="row" gap={0.75} flexWrap="wrap" sx={{ flexGrow: 1 }}>
+          {COLUMNS.map((c) => {
+            const on = visible.includes(c.key);
+            return (
+              <Chip
+                key={c.key}
+                label={c.label}
+                size="small"
+                onClick={() => toggle(c.key)}
+                color={on ? c.tone : "default"}
+                variant={on ? "filled" : "outlined"}
+              />
+            );
+          })}
         </Stack>
 
-        {dashboard.inProgress.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
-            Nothing in progress. Pick something off the board.
-          </Typography>
-        ) : (
-          <Stack spacing={1}>
-            {dashboard.inProgress.map((task) => (
-              <Stack key={task.publicId} direction="row" spacing={1} alignItems="stretch">
-                <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                  <TaskCard
-                    task={task}
-                    onClick={setOpenTaskId}
-                    onLogTime={logTimeFor}
-                  />
-                </Box>
+        <Button size="small" variant="outlined" onClick={() => navigate("/work/tasks?view=board")}>
+          Open board
+        </Button>
+      </Stack>
 
-                {/* Quick status change without opening the modal */}
-                <Select
-                  size="small"
-                  value={task.status}
-                  onChange={(e) =>
-                    setStatus.mutate({ publicId: task.publicId, status: e.target.value })
-                  }
-                  sx={{ width: 130, flexShrink: 0, alignSelf: "center" }}
-                >
-                  {WORK_ITEM_STATUSES.map((s) => (
-                    <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>
-                  ))}
-                </Select>
-              </Stack>
-            ))}
-          </Stack>
-        )}
-      </Box>
-
-      {dashboard.overdue.length > 0 && (
-        <Box>
-          <Typography {...sectionLabel} sx={{ ...sectionLabel.sx, mb: 1, display: "block" }} color="error.main">
-            Overdue
-          </Typography>
-          <Stack spacing={1}>
-            {dashboard.overdue.slice(0, 5).map((task) => (
-              <TaskCard
-                key={task.publicId}
-                task={task}
-                onClick={setOpenTaskId}
-                onLogTime={logTimeFor}
-              />
-            ))}
-          </Stack>
-        </Box>
+      {shown.length === 0 ? (
+        <Typography variant="body2" color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
+          Select a status to show tasks.
+        </Typography>
+      ) : (
+        <Grid container spacing={2}>
+          {shown.map((c) => (
+            <Grid key={c.key} size={{ xs: 12, sm: shown.length === 1 ? 12 : 6, lg: 12 / shown.length }}>
+              <Column column={c} tasks={dashboard[c.key]} count={counts[c.key]}>
+                {dashboard[c.key].slice(0, c.key === "overdue" ? 5 : 8).map((task) => (
+                  <Stack key={task.publicId} spacing={0.75}>
+                    <TaskCard task={task} onClick={setOpenTaskId} onLogTime={logTimeFor} />
+                    {/* Quick status change without opening the modal */}
+                    {c.key === "inProgress" && (
+                      <Select
+                        size="small"
+                        value={task.status}
+                        onChange={(e) =>
+                          setStatus.mutate({ publicId: task.publicId, status: e.target.value })
+                        }
+                      >
+                        {WORK_ITEM_STATUSES.map((s) => (
+                          <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>
+                        ))}
+                      </Select>
+                    )}
+                  </Stack>
+                ))}
+              </Column>
+            </Grid>
+          ))}
+        </Grid>
       )}
 
       <TaskDetailModal
