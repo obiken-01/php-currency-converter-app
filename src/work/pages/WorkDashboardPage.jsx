@@ -20,11 +20,13 @@ import { alpha } from "@mui/material/styles";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import TimelapseIcon from "@mui/icons-material/Timelapse";
 import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import BlockIcon from "@mui/icons-material/Block";
+import InboxIcon from "@mui/icons-material/Inbox";
+import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import TaskCard from "../components/tasks/TaskCard";
 import TaskDetailModal from "../components/tasks/TaskDetailModal";
-import { getProjectStatus, WORK_ITEM_STATUSES } from "../constants/statuses";
+import { BOARD_STATUSES, getProjectStatus, WORK_ITEM_STATUSES } from "../constants/statuses";
 import { useDashboard } from "../hooks/useDashboard";
 import { useProjects } from "../hooks/useProjects";
 import { useSetWorkItemStatus } from "../hooks/useWorkItems";
@@ -139,11 +141,24 @@ function ActiveProjects({ onOpen }) {
   );
 }
 
-const COLUMNS = [
-  { key: "inProgress", label: "In progress", tone: "info",    icon: <PlayCircleOutlineIcon fontSize="small" />,   empty: "Nothing in progress. Pick something off the board." },
-  { key: "overdue",    label: "Overdue",     tone: "error",   icon: <WarningAmberIcon fontSize="small" />,        empty: "Nothing overdue." },
-  { key: "completed",  label: "Completed",   tone: "success", icon: <CheckCircleOutlineIcon fontSize="small" />,  empty: "No completed tasks yet." },
-];
+// One column per status a task can carry — the dashboard just follows the
+// status set on each task.
+const COLUMN_STYLE = {
+  Backlog:    { tone: "secondary", icon: <InboxIcon fontSize="small" /> },
+  Todo:       { tone: "warning",   icon: <RadioButtonUncheckedIcon fontSize="small" /> },
+  InProgress: { tone: "info",      icon: <PlayCircleOutlineIcon fontSize="small" /> },
+  Blocked:    { tone: "error",     icon: <BlockIcon fontSize="small" /> },
+  Done:       { tone: "success",   icon: <CheckCircleOutlineIcon fontSize="small" /> },
+};
+
+const COLUMNS = BOARD_STATUSES.map((s) => ({
+  key: s.value,
+  label: s.label,
+  empty: "Nothing here.",
+  ...COLUMN_STYLE[s.value],
+}));
+
+const MAX_PER_COLUMN = 8;
 
 function Column({ column, tasks, count, children }) {
   return (
@@ -209,14 +224,14 @@ export default function WorkDashboardPage() {
   }
 
   const format = (hours) => `${hours.toFixed(2).replace(/\.00$/, "")} h`;
-  const { counts } = dashboard;
+  const { byStatus } = dashboard;
   const shown = COLUMNS.filter((c) => visible.includes(c.key));
 
   return (
     <Stack spacing={3}>
       {/* Summary row */}
       <Grid container spacing={2}>
-        <Grid size={{ xs: 6, md: "grow" }}>
+        <Grid size={{ xs: 6, sm: 4, lg: "grow" }}>
           <StatCard
             icon={<AccessTimeIcon fontSize="small" />}
             label="Hours today"
@@ -224,7 +239,7 @@ export default function WorkDashboardPage() {
             onClick={() => navigate("/work/logs")}
           />
         </Grid>
-        <Grid size={{ xs: 6, md: "grow" }}>
+        <Grid size={{ xs: 6, sm: 4, lg: "grow" }}>
           <StatCard
             icon={<TimelapseIcon fontSize="small" />}
             label="Hours this cutoff"
@@ -235,11 +250,11 @@ export default function WorkDashboardPage() {
           />
         </Grid>
         {COLUMNS.map((c) => (
-          <Grid key={c.key} size={{ xs: 6, md: "grow" }}>
+          <Grid key={c.key} size={{ xs: 6, sm: 4, lg: "grow" }}>
             <StatCard
               icon={c.icon}
               label={c.label}
-              value={counts[c.key]}
+              value={byStatus[c.key].length}
               tone={c.tone}
               onClick={() => setVisible([c.key])}
             />
@@ -293,14 +308,19 @@ export default function WorkDashboardPage() {
         </Typography>
       ) : (
         <Grid container spacing={2}>
-          {shown.map((c) => (
-            <Grid key={c.key} size={{ xs: 12, sm: shown.length === 1 ? 12 : 6, lg: 12 / shown.length }}>
-              <Column column={c} tasks={dashboard[c.key]} count={counts[c.key]}>
-                {dashboard[c.key].slice(0, c.key === "overdue" ? 5 : 8).map((task) => (
-                  <Stack key={task.publicId} spacing={0.75}>
-                    <TaskCard task={task} onClick={setOpenTaskId} onLogTime={logTimeFor} />
-                    {/* Quick status change without opening the modal */}
-                    {c.key === "inProgress" && (
+          {shown.map((c) => {
+            const tasks = byStatus[c.key];
+            const hidden = tasks.length - MAX_PER_COLUMN;
+            return (
+              <Grid
+                key={c.key}
+                size={{ xs: 12, md: shown.length === 1 ? 12 : 6, lg: 12 / Math.min(shown.length, 3) }}
+              >
+                <Column column={c} tasks={tasks} count={tasks.length}>
+                  {tasks.slice(0, MAX_PER_COLUMN).map((task) => (
+                    <Stack key={task.publicId} spacing={0.75}>
+                      <TaskCard task={task} onClick={setOpenTaskId} onLogTime={logTimeFor} />
+                      {/* Quick status change without opening the modal */}
                       <Select
                         size="small"
                         value={task.status}
@@ -308,16 +328,21 @@ export default function WorkDashboardPage() {
                           setStatus.mutate({ publicId: task.publicId, status: e.target.value })
                         }
                       >
-                        {WORK_ITEM_STATUSES.map((s) => (
-                          <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>
+                        {WORK_ITEM_STATUSES.map((st) => (
+                          <MenuItem key={st.value} value={st.value}>{st.label}</MenuItem>
                         ))}
                       </Select>
-                    )}
-                  </Stack>
-                ))}
-              </Column>
-            </Grid>
-          ))}
+                    </Stack>
+                  ))}
+                  {hidden > 0 && (
+                    <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+                      +{hidden} more on the board
+                    </Typography>
+                  )}
+                </Column>
+              </Grid>
+            );
+          })}
         </Grid>
       )}
 
