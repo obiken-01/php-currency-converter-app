@@ -16,6 +16,7 @@ import ToastProvider from "./work/context/ToastProvider";
 import OfflineBar from "./components/common/OfflineBar";
 import InstallBanner from "./components/common/InstallBanner";
 import PWAUpdatePrompt from "./components/common/PWAUpdatePrompt";
+import DomainMoveGate from "./components/common/DomainMoveGate";
 
 // Work
 import WorkLoginPage from "./work/pages/WorkLoginPage";
@@ -81,6 +82,7 @@ function App() {
           <BrowserRouter>
             {/* Above the routes so they show on the site tools and inside /work
                 alike, both of which bring their own chrome. */}
+            <DomainMoveGate />
             <OfflineBar />
             <InstallBanner />
 
