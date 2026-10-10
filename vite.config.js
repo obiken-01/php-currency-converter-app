@@ -71,18 +71,21 @@ export default defineConfig({
           {
             // Auth first — order matters, Workbox takes the first match.
             // Tokens sitting in a cache are a real problem.
-            // The hostname is written out in full on purpose: Workbox
+            // The hostnames are written out in full on purpose: Workbox
             // stringifies these matchers into sw.js, so anything they close
-            // over is undefined at runtime.
+            // over is undefined at runtime. Both API hosts are listed so a
+            // build still pointed at the Railway URL never caches tokens.
             urlPattern: ({ url }) =>
-              url.hostname === "ralph-portfolio-production.up.railway.app" &&
+              ["api.ralphalcaide.com", "ralph-portfolio-production.up.railway.app"]
+                .includes(url.hostname) &&
               url.pathname.includes("/work/auth"),
             handler: "NetworkOnly",
           },
           {
             // API GETs: fresh when online, cached when not.
             urlPattern: ({ url, request }) =>
-              url.hostname === "ralph-portfolio-production.up.railway.app" &&
+              ["api.ralphalcaide.com", "ralph-portfolio-production.up.railway.app"]
+                .includes(url.hostname) &&
               url.pathname.startsWith("/api/") &&
               request.method === "GET",
             handler: "NetworkFirst",

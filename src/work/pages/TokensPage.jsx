@@ -25,7 +25,7 @@ import { formatDateTime, formatShortDate, isOverdue } from "../utils/dates";
 
 const API_BASE =
   import.meta.env.VITE_API_URL ??
-  "https://ralph-portfolio-production.up.railway.app/api";
+  "https://api.ralphalcaide.com/api";
 
 const MCP_URL = `${API_BASE}/work/mcp`;
 

@@ -3,7 +3,7 @@ import { enqueue } from "../offline/outbox";
 import { isAuthRejection, isNetworkError, isQueueable } from "../offline/policy";
 
 const BASE_URL = import.meta.env.VITE_API_URL
-  ?? "https://ralph-portfolio-production.up.railway.app/api";
+  ?? "https://api.ralphalcaide.com/api";
 
 const ACCESS_TOKEN_KEY  = "work_access_token";
 const REFRESH_TOKEN_KEY = "work_refresh_token";
