@@ -16,12 +16,12 @@ import CameraAltIcon from "@mui/icons-material/CameraAlt";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 
 import ShoppingItem from "./ShoppingItem";
+import { SHOPPING_STORAGE_KEY as STORAGE_KEY } from "../../lib/domainMove";
 
 const API_URL = `${
   import.meta.env.VITE_API_URL ?? "https://api.ralphalcaide.com/api"
 }/shopping-list/parse`;
 const API_KEY = import.meta.env.VITE_SHOPPING_API_KEY ?? "";
-const STORAGE_KEY = "ralphy-shopping-list";
 
 function loadList() {
   try {
