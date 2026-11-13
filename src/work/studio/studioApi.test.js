@@ -13,7 +13,7 @@ vi.mock("../api/workApi", () => ({
 }));
 
 const { refreshAccessToken } = await import("../api/workApi");
-const { default: studioHttp, studioApi, errorMessage, errorCode, STUDIO_URL } =
+const { default: studioHttp, studioApi, errorMessage, errorCode, STUDIO_URL, resolveStudioUrl, isStudioConfigured } =
   await import("./studioApi");
 
 const ok = (data = null) => Promise.resolve({ data: { data, message: null } });
@@ -142,5 +142,44 @@ describe("interceptors", () => {
     ).rejects.toMatchObject({ response: { status: 401 } });
     expect(calls).toBe(2);
     expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("refresh failure", () => {
+  it("hands the caller the original 401, not the refresh error", async () => {
+    vi.restoreAllMocks();
+    refreshAccessToken.mockImplementationOnce(() => Promise.reject(new Error("Network Error")));
+    const body = { data: null, message: "Studio is private.", code: "unauthorized" };
+    const err = await studioHttp
+      .get("/session", {
+        adapter: (config) =>
+          Promise.reject(
+            new AxiosError("fail", "ERR_BAD_REQUEST", config, null, {
+              status: 401, data: body, config, headers: {}, statusText: "",
+            }),
+          ),
+      })
+      .catch((e) => e);
+    expect(err.response.status).toBe(401);
+    expect(errorMessage(err)).toBe("Studio is private.");
+  });
+});
+
+describe("service url", () => {
+  it("is empty in production when unset or blank, so Studio is off", () => {
+    expect(resolveStudioUrl({ DEV: false })).toBe("");
+    expect(resolveStudioUrl({ DEV: false, VITE_STUDIO_URL: "" })).toBe("");
+    expect(resolveStudioUrl({ DEV: false, VITE_STUDIO_URL: "  " })).toBe("");
+  });
+  it("falls back to localhost in dev only", () => {
+    expect(resolveStudioUrl({ DEV: true })).toBe("http://localhost:8000");
+    expect(resolveStudioUrl({ DEV: true, VITE_STUDIO_URL: "" })).toBe("http://localhost:8000");
+  });
+  it("uses the configured value with the trailing slash trimmed", () => {
+    expect(resolveStudioUrl({ DEV: false, VITE_STUDIO_URL: "https://studio.example.com/" }))
+      .toBe("https://studio.example.com");
+  });
+  it("reports configured state from the resolved url", () => {
+    expect(isStudioConfigured()).toBe(STUDIO_URL !== "");
   });
 });

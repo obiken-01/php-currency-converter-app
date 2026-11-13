@@ -1,7 +1,24 @@
 import axios from "axios";
 import { getAccessToken, refreshAccessToken } from "../api/workApi";
 
-export const STUDIO_URL = import.meta.env.VITE_STUDIO_URL ?? "http://localhost:8000";
+/**
+ * The localhost fallback is for dev only. A production build with no URL
+ * must not guess one: it would send the Work token to whatever listens on
+ * that port (and an http call from an https page is blocked anyway).
+ * An empty value counts as unset. A trailing slash is trimmed.
+ */
+export function resolveStudioUrl(env) {
+  const set = typeof env.VITE_STUDIO_URL === "string" ? env.VITE_STUDIO_URL.trim() : "";
+  if (set) return set.replace(/\/+$/, "");
+  return env.DEV ? "http://localhost:8000" : "";
+}
+
+export const STUDIO_URL = resolveStudioUrl(import.meta.env);
+
+/** False when no service URL is configured: Studio is then simply off. */
+export function isStudioConfigured() {
+  return STUDIO_URL !== "";
+}
 
 const FAST = 30_000;
 // The first beat analysis after a deploy is slow, and a big upload's
@@ -26,7 +43,13 @@ studioHttp.interceptors.response.use(
     const original = error.config;
     if (error.response?.status === 401 && original && !original._retry) {
       original._retry = true;
-      const accessToken = await refreshAccessToken();
+      let accessToken;
+      try {
+        accessToken = await refreshAccessToken();
+      } catch {
+        // The caller gets the 401 that started this, with the service's message.
+        return Promise.reject(error);
+      }
       original.headers.Authorization = `Bearer ${accessToken}`;
       return studioHttp(original);
     }
