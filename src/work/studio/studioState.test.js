@@ -452,7 +452,10 @@ describe("draft", () => {
     s = reducer(s, { type: "draft/failed", message: "No clear beat." });
     expect(s.draft).not.toBeNull();
     expect(s.draftError).toBe("No clear beat.");
+    expect(s.draftErrorFrom).toBe("reshuffle");
     expect(s.drafting).toBeNull();
+    s = reducer(s, { type: "draft/started", mode: "draft", seed: 3 });
+    expect(s.draftError).toBeNull();
   });
 
   it("changing aspect or audio makes the draft stale; changing back does not", () => {

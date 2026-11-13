@@ -55,6 +55,7 @@ export const initialState = {
   draft: null, // { editList, warnings, request }
   drafting: null, // "draft" | "reshuffle" | null
   draftError: null,
+  draftErrorFrom: null, // "draft" | "reshuffle": which button's error it is
   job: null, // { jobId, status, percent, position, message }
   rendering: false,
   renderError: null,
@@ -454,7 +455,7 @@ export function reducer(state, action) {
       };
 
     case "draft/started":
-      return { ...state, drafting: action.mode, seed: action.seed, draftError: null };
+      return { ...state, drafting: action.mode, seed: action.seed, draftError: null, draftErrorFrom: null };
     case "draft/done":
       if (state.drafting === null) return state;
       return {
@@ -464,7 +465,7 @@ export function reducer(state, action) {
       };
     case "draft/failed":
       if (state.drafting === null) return state;
-      return { ...state, drafting: null, draftError: action.message };
+      return { ...state, drafting: null, draftError: action.message, draftErrorFrom: state.drafting };
 
     case "slot/filled":
       if (!state.draft) return state;
