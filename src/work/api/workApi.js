@@ -39,21 +39,60 @@ workApi.interceptors.request.use((config) => {
   return config;
 });
 
-// ── Response interceptor — handle token refresh ──────────────────
-let isRefreshing = false;
-let failedQueue  = [];
+// ── Token refresh — single flight ────────────────────────────────
+// Concurrent callers (several 401s at once, or another API client) share one
+// request. The refresh token is rotated on use, so a second parallel call
+// would present an already-spent token and sign the user out.
+let refreshInFlight = null;
 
-function processQueue(error, token = null) {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token);
+export function refreshAccessToken() {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+
+    if (!refreshToken) {
+      clearTokens();
+      window.location.href = "/work/login";
+      const err = new Error("No refresh token");
+      err.code = NO_REFRESH_TOKEN;
+      throw err;
     }
+
+    try {
+      const res = await axios.post(
+        `${BASE_URL}/work/auth/refresh`,
+        { refreshToken }
+      );
+
+      const { accessToken, refreshToken: newRefreshToken } = res.data.data;
+
+      localStorage.setItem(ACCESS_TOKEN_KEY,  accessToken);
+      localStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken);
+
+      workApi.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
+
+      return accessToken;
+    } catch (refreshError) {
+      // Only a refusal ends the session. A refresh that never reached the
+      // server means the network is down, and throwing the tokens away
+      // there is what forced a fresh login every time signal dropped.
+      if (isAuthRejection(refreshError)) {
+        clearTokens();
+        window.location.href = "/work/login";
+      }
+      throw refreshError;
+    }
+  })().finally(() => {
+    refreshInFlight = null;
   });
-  failedQueue = [];
+
+  return refreshInFlight;
 }
 
+const NO_REFRESH_TOKEN = "NO_REFRESH_TOKEN";
+
+// ── Response interceptor — handle token refresh ──────────────────
 workApi.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -81,60 +120,16 @@ workApi.interceptors.response.use(
     }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then((token) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-            return workApi(originalRequest);
-          })
-          .catch((err) => Promise.reject(err));
-      }
-
       originalRequest._retry = true;
-      isRefreshing = true;
-
-      const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-
-      if (!refreshToken) {
-        clearTokens();
-        window.location.href = "/work/login";
-        return Promise.reject(error);
-      }
 
       try {
-        const res = await axios.post(
-          `${BASE_URL}/work/auth/refresh`,
-          { refreshToken }
-        );
-
-        const { accessToken, refreshToken: newRefreshToken } =
-          res.data.data;
-
-        localStorage.setItem(ACCESS_TOKEN_KEY,  accessToken);
-        localStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken);
-
-        workApi.defaults.headers.common.Authorization =
-          `Bearer ${accessToken}`;
-
-        processQueue(null, accessToken);
+        const accessToken = await refreshAccessToken();
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return workApi(originalRequest);
       } catch (refreshError) {
-        processQueue(refreshError, null);
-
-        // Only a refusal ends the session. A refresh that never reached the
-        // server means the network is down, and throwing the tokens away
-        // there is what forced a fresh login every time signal dropped.
-        if (isAuthRejection(refreshError)) {
-          clearTokens();
-          window.location.href = "/work/login";
-        }
-
+        // No refresh token at all: the caller gets the 401 that started this.
+        if (refreshError?.code === NO_REFRESH_TOKEN) return Promise.reject(error);
         return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
       }
     }
 
