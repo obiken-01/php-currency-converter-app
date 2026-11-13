@@ -4,6 +4,8 @@ import ListAltIcon from "@mui/icons-material/ListAlt";
 import TaskAltIcon from "@mui/icons-material/TaskAlt";
 import ViewKanbanIcon from "@mui/icons-material/ViewKanban";
 import TimelineIcon from "@mui/icons-material/Timeline";
+import MovieCreationOutlinedIcon from "@mui/icons-material/MovieCreationOutlined";
+import { useStudioSession } from "../studio/useStudioSession";
 
 // MUI truncates labels past five items. Projects is reachable from the
 // Tasks page on mobile rather than claiming a slot here.
@@ -14,13 +16,18 @@ const ITEMS = [
   { label: "Timeline", path: "/work/timeline", icon: <TimelineIcon /> },
 ];
 
+// The fifth and last slot, for the one account Studio allows.
+const STUDIO_ITEM = { label: "Studio", path: "/work/studio", icon: <MovieCreationOutlinedIcon /> };
+
 export default function WorkBottomNav() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const view = searchParams.get("view") ?? "list";
+  const { allowed } = useStudioSession();
+  const items = allowed ? [...ITEMS, STUDIO_ITEM] : ITEMS;
 
-  const index = ITEMS.findIndex((item) => {
+  const index = items.findIndex((item) => {
     if (!pathname.startsWith(item.path)) return false;
     return item.view ? item.view === view : true;
   });
@@ -33,12 +40,12 @@ export default function WorkBottomNav() {
       <BottomNavigation
         value={index === -1 ? false : index}
         onChange={(_, next) => {
-          const item = ITEMS[next];
+          const item = items[next];
           navigate(item.view ? `${item.path}?view=${item.view}` : item.path);
         }}
         showLabels
       >
-        {ITEMS.map((item) => (
+        {items.map((item) => (
           <BottomNavigationAction
             key={`${item.path}:${item.view ?? ""}`}
             label={item.label}
