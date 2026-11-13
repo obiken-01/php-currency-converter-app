@@ -138,7 +138,7 @@ describe("uploadFile", () => {
       putChunk: vi.fn(async () => { during = findInterrupted(file); return { received: [] }; }),
     });
     await uploadFile(file, { api });
-    expect(during).toBe("u1");
+    expect(during).toEqual({ uploadId: "u1", chunkSize: 8 });
     expect(findInterrupted(file)).toBeNull();
   });
 
@@ -212,7 +212,7 @@ describe("uploadFile", () => {
     await assertion;
     expect(api.putChunk).toHaveBeenCalledTimes(4);
     expect(api.completeUpload).not.toHaveBeenCalled();
-    expect(findInterrupted(file)).toBe("u1");
+    expect(findInterrupted(file)).toEqual({ uploadId: "u1", chunkSize: 8 });
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -231,10 +231,10 @@ describe("uploadFile", () => {
   });
 
   it("resumes only the missing chunks", async () => {
-    // Three chunks of 8 over 20 bytes; the status reply carries the chunk size.
-    const api = fakeApi({ uploadStatus: vi.fn(async () => ({ received: [0, 2], totalChunks: 3, chunkSize: 8 })) });
+    // Three chunks of 8 over 20 bytes; the status reply, like the service's, has no chunk size.
+    const api = fakeApi({ uploadStatus: vi.fn(async () => ({ received: [0, 2], totalChunks: 3 })) });
     const seen = [];
-    const meta = await uploadFile(fakeFile(20), { api, resumeUploadId: "u1", onProgress: (f) => seen.push(f) });
+    const meta = await uploadFile(fakeFile(20), { api, resume: { uploadId: "u1", chunkSize: 8 }, onProgress: (f) => seen.push(f) });
     expect(api.uploadStatus).toHaveBeenCalledWith("u1");
     expect(api.createUpload).not.toHaveBeenCalled();
     expect(chunkNumbers(api)).toEqual([1]);
@@ -242,9 +242,31 @@ describe("uploadFile", () => {
     expect(meta).toBe(META);
   });
 
+  it("resumes with the remembered chunk size, sending the right byte ranges", async () => {
+    const file = fakeFile(20);
+    const api = fakeApi({ uploadStatus: vi.fn(async () => ({ received: [0], totalChunks: 3 })) });
+    await uploadFile(file, { api, resume: { uploadId: "u1", chunkSize: 8 } });
+    expect(chunkNumbers(api)).toEqual([1, 2]);
+    expect(api.cancelUpload).not.toHaveBeenCalled();
+    const sizes = Object.fromEntries(api.putChunk.mock.calls.map((c) => [c[1], c[2].end - c[2].start]));
+    expect(sizes).toEqual({ 1: 8, 2: 4 });
+  });
+
+  it("rejects a resume for a different file without sending anything", async () => {
+    const api = fakeApi({ uploadStatus: vi.fn(async () => ({ received: [0], totalChunks: 5 })) });
+    const p = uploadFile(fakeFile(20), { api, resume: { uploadId: "u1", chunkSize: 8 } });
+    await expect(p).rejects.toMatchObject({
+      code: "resume_mismatch",
+      message: "This is not the same file as the interrupted upload.",
+    });
+    expect(api.putChunk).not.toHaveBeenCalled();
+    expect(api.createUpload).not.toHaveBeenCalled();
+    expect(api.cancelUpload).not.toHaveBeenCalled();
+  });
+
   it("starts a fresh upload when the server no longer has the resumed one", async () => {
     const api = fakeApi({ uploadStatus: vi.fn(async () => { throw httpError(404, "unknown_upload"); }) });
-    await uploadFile(fakeFile(20), { api, resumeUploadId: "gone" });
+    await uploadFile(fakeFile(20), { api, resume: { uploadId: "gone", chunkSize: 8 } });
     expect(api.createUpload).toHaveBeenCalledTimes(1);
     expect(chunkNumbers(api)).toEqual([0, 1, 2]);
     expect(api.putChunk.mock.calls.every((c) => c[0] === "u1")).toBe(true);
@@ -373,13 +395,13 @@ describe("token refresh mid-upload", () => {
 describe("remembered uploads", () => {
   it("finds an interrupted upload for the same file after a reload", () => {
     const file = { name: "a.mp4", size: 5, lastModified: 1 };
-    rememberUpload(file, "u1");
-    expect(findInterrupted({ name: "a.mp4", size: 5, lastModified: 1 })).toBe("u1");
+    rememberUpload(file, "u1", 8);
+    expect(findInterrupted({ name: "a.mp4", size: 5, lastModified: 1 })).toEqual({ uploadId: "u1", chunkSize: 8 });
     expect(JSON.parse(localStorage.getItem("studio_uploads"))["a.mp4|5|1"]).toMatchObject({ uploadId: "u1" });
   });
 
   it("does not match a different file with the same name and size", () => {
-    rememberUpload({ name: "a.mp4", size: 5, lastModified: 1 }, "u1");
+    rememberUpload({ name: "a.mp4", size: 5, lastModified: 1 }, "u1", 8);
     expect(findInterrupted({ name: "a.mp4", size: 5, lastModified: 2 })).toBeNull();
   });
 
@@ -387,9 +409,9 @@ describe("remembered uploads", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
     const file = { name: "a.mp4", size: 5, lastModified: 1 };
-    rememberUpload(file, "u1");
+    rememberUpload(file, "u1", 8);
     vi.setSystemTime(new Date("2026-01-01T23:59:00Z"));
-    expect(findInterrupted(file)).toBe("u1");
+    expect(findInterrupted(file)).toEqual({ uploadId: "u1", chunkSize: 8 });
     vi.setSystemTime(new Date("2026-01-02T00:01:00Z"));
     expect(findInterrupted(file)).toBeNull();
     expect(JSON.parse(localStorage.getItem("studio_uploads"))).toEqual({});
@@ -398,11 +420,11 @@ describe("remembered uploads", () => {
   it("forgets one file or all of them", () => {
     const a = { name: "a.mp4", size: 5, lastModified: 1 };
     const b = { name: "b.mp4", size: 5, lastModified: 1 };
-    rememberUpload(a, "u1");
-    rememberUpload(b, "u2");
+    rememberUpload(a, "u1", 8);
+    rememberUpload(b, "u2", 4);
     forgetUpload(a);
     expect(findInterrupted(a)).toBeNull();
-    expect(findInterrupted(b)).toBe("u2");
+    expect(findInterrupted(b)).toEqual({ uploadId: "u2", chunkSize: 4 });
     forgetAllUploads();
     expect(localStorage.getItem("studio_uploads")).toBeNull();
     expect(findInterrupted(b)).toBeNull();
@@ -413,12 +435,12 @@ describe("remembered uploads", () => {
     for (const raw of ["not json", "null", "[1,2]", '"str"', '{"a.mp4|5|1":"oops"}', '{"a.mp4|5|1":{"uploadId":1}}']) {
       localStorage.setItem("studio_uploads", raw);
       expect(findInterrupted(file)).toBeNull();
-      rememberUpload(file, "u1");
-      expect(findInterrupted(file)).toBe("u1");
+      rememberUpload(file, "u1", 8);
+      expect(findInterrupted(file)).toEqual({ uploadId: "u1", chunkSize: 8 });
       forgetUpload(file);
     }
     vi.stubGlobal("localStorage", undefined);
     expect(findInterrupted(file)).toBeNull();
-    expect(() => { rememberUpload(file, "u1"); forgetUpload(file); forgetAllUploads(); }).not.toThrow();
+    expect(() => { rememberUpload(file, "u1", 8); forgetUpload(file); forgetAllUploads(); }).not.toThrow();
   });
 });

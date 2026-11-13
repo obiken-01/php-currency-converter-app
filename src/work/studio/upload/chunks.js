@@ -102,9 +102,9 @@ function writeMap(map) {
   }
 }
 
-export function rememberUpload(file, uploadId) {
+export function rememberUpload(file, uploadId, chunkSize) {
   const map = readMap();
-  map[keyOf(file)] = { uploadId, savedAt: Date.now() };
+  map[keyOf(file)] = { uploadId, chunkSize, savedAt: Date.now() };
   writeMap(map);
 }
 
@@ -132,51 +132,58 @@ export function findInterrupted(file) {
   let pruned = false;
   for (const [key, entry] of Object.entries(map)) {
     const valid =
-      entry && typeof entry.uploadId === "string" && Number.isFinite(entry.savedAt) && now - entry.savedAt <= MAX_AGE_MS;
+      entry && typeof entry.uploadId === "string" && entry.chunkSize > 0 && Number.isFinite(entry.savedAt) && now - entry.savedAt <= MAX_AGE_MS;
     if (!valid) {
       delete map[key];
       pruned = true;
     }
   }
   if (pruned) writeMap(map);
-  return map[keyOf(file)]?.uploadId ?? null;
+  const hit = map[keyOf(file)];
+  return hit ? { uploadId: hit.uploadId, chunkSize: hit.chunkSize } : null;
 }
 
 // ---- the upload -----------------------------------------------------------
 
 /**
- * Opens the upload to send: a resumed one when the server still has it (and
- * we can tell its chunk size), otherwise a fresh one.
+ * Opens the upload to send: the resumed one when the server still has it,
+ * otherwise a fresh one.
  */
-async function openUpload(file, api, resumeUploadId) {
-  if (resumeUploadId) {
+async function openUpload(file, api, resume) {
+  if (resume?.uploadId) {
     let status = null;
     try {
-      status = await api.uploadStatus(resumeUploadId);
+      status = await api.uploadStatus(resume.uploadId);
     } catch (error) {
       if (!isUnknownUpload(error)) throw error;
     }
     if (status) {
-      // The status call does not say how big a chunk is. Take it from the
-      // reply when present; a single chunk is the whole file.
-      const chunkSize = status.chunkSize ?? (status.totalChunks === 1 ? file.size : null);
-      if (chunkSize > 0 && Math.ceil(file.size / chunkSize) === status.totalChunks) {
-        return {
-          uploadId: resumeUploadId,
-          chunkSize,
-          totalChunks: status.totalChunks,
-          received: new Set(status.received ?? []),
-        };
+      const chunkSize = resume.chunkSize;
+      const matches =
+        file.size === 0 ? true : chunkSize > 0 && Math.ceil(file.size / chunkSize) === status.totalChunks;
+      if (!matches) {
+        const error = new Error("This is not the same file as the interrupted upload.");
+        error.code = "resume_mismatch";
+        throw error;
       }
-      // Cannot map chunks safely: free the old one and start over.
-      await api.cancelUpload(resumeUploadId).catch(() => {});
+      return {
+        uploadId: resume.uploadId,
+        chunkSize,
+        totalChunks: status.totalChunks,
+        received: new Set(status.received ?? []),
+      };
     }
   }
   const created = await api.createUpload({ filename: file.name, size: file.size, kind: kindOf(file) });
   return { ...created, received: new Set() };
 }
 
-export async function uploadFile(file, { api = studioApi, onProgress, signal, resumeUploadId } = {}) {
+/**
+ * resume is { uploadId, chunkSize } from findInterrupted or the service's project listing.
+ * A 404 unknown_upload from complete on a resume means start over; a network error during
+ * complete is not retried (complete consumes the upload id).
+ */
+export async function uploadFile(file, { api = studioApi, onProgress, signal, resume } = {}) {
   if (signal?.aborted) throw abortError();
 
   // One internal controller: an outside abort or a permanent failure stops
@@ -186,7 +193,7 @@ export async function uploadFile(file, { api = studioApi, onProgress, signal, re
   signal?.addEventListener("abort", onOuterAbort, { once: true });
 
   try {
-    const upload = await openUpload(file, api, resumeUploadId);
+    const upload = await openUpload(file, api, resume);
     if (stop.signal.aborted) throw abortError();
     const { uploadId, chunkSize, totalChunks } = upload;
 
@@ -194,7 +201,7 @@ export async function uploadFile(file, { api = studioApi, onProgress, signal, re
     if (chunks.length !== totalChunks) {
       throw new Error("The service's chunk plan does not match the file size.");
     }
-    rememberUpload(file, uploadId);
+    rememberUpload(file, uploadId, chunkSize);
 
     let doneBytes = 0;
     let lastReported = 0;
