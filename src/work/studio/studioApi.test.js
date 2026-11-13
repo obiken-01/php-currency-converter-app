@@ -55,14 +55,14 @@ describe("paths", () => {
 });
 
 describe("request options", () => {
-  it("sends chunks as raw bytes with no timeout", async () => {
+  it("sends chunks as raw bytes with a 180 s timeout, so a stalled chunk errors and is retried", async () => {
     const blob = new Blob(["x"]);
     const signal = new AbortController().signal;
     await studioApi.putChunk("u1", 0, blob, { signal });
     const [, body, config] = lastCall("put");
     expect(body).toBe(blob);
     expect(config.headers["Content-Type"]).toBe("application/octet-stream");
-    expect(config.timeout).toBe(0);
+    expect(config.timeout).toBe(180000);
     expect(config.signal).toBe(signal);
   });
 
@@ -181,5 +181,34 @@ describe("service url", () => {
   });
   it("reports configured state from the resolved url", () => {
     expect(isStudioConfigured()).toBe(STUDIO_URL !== "");
+  });
+});
+
+describe("not configured", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it("rejects every request at once, with no network call", async () => {
+    vi.resetModules();
+    vi.stubEnv("DEV", false);
+    vi.stubEnv("VITE_STUDIO_URL", "");
+    const fresh = await import("./studioApi");
+    expect(fresh.isStudioConfigured()).toBe(false);
+    const adapter = vi.fn((config) => Promise.resolve({ status: 200, data: { data: "ok" }, config, headers: {} }));
+    const err = await fresh.default.get("/session", { adapter }).catch((e) => e);
+    expect(adapter).not.toHaveBeenCalled();
+    expect(err).toBeInstanceOf(Error);
+    expect(err.code).toBe("studio_not_configured");
+  });
+
+  it("lets requests through when configured", async () => {
+    vi.resetModules();
+    vi.stubEnv("VITE_STUDIO_URL", "https://studio.example.com");
+    const fresh = await import("./studioApi");
+    const adapter = vi.fn((config) => Promise.resolve({ status: 200, data: { data: "ok" }, config, headers: {} }));
+    await fresh.default.get("/session", { adapter });
+    expect(adapter).toHaveBeenCalledTimes(1);
   });
 });

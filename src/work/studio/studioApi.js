@@ -24,6 +24,9 @@ const FAST = 30_000;
 // The first beat analysis after a deploy is slow, and a big upload's
 // completion probes the whole file.
 const SLOW = 120_000;
+// One 8 MB chunk on a slow phone link. Without a limit a stalled connection
+// never errors; with one, the uploader sees a network error and retries.
+const CHUNK = 180_000;
 
 const NO_CONNECTION = "Can't reach Studio. Check your connection.";
 
@@ -32,6 +35,13 @@ const NO_CONNECTION = "Can't reach Studio. Check your connection.";
 const studioHttp = axios.create({ baseURL: STUDIO_URL, timeout: FAST });
 
 studioHttp.interceptors.request.use((config) => {
+  // With no service URL a request would go to the app's own origin. Refuse it
+  // here so nothing is sent, whoever calls.
+  if (!isStudioConfigured()) {
+    const error = new Error("Studio is not configured.");
+    error.code = "studio_not_configured";
+    return Promise.reject(error);
+  }
   const token = getAccessToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
@@ -68,7 +78,7 @@ export const studioApi = {
     studioHttp
       .put(`/uploads/${uploadId}/chunks/${n}`, blob, {
         headers: { "Content-Type": "application/octet-stream" },
-        timeout: 0,
+        timeout: CHUNK,
         signal,
       })
       .then(data),
