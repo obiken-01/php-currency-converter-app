@@ -35,8 +35,8 @@ export default function WorkBottomNav() {
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const view = searchParams.get("view") ?? "list";
-  const { allowed } = useStudioSession();
-  const items = allowed ? [...ITEMS, STUDIO_ITEM] : ITEMS;
+  const { showTab } = useStudioSession();
+  const items = showTab ? [...ITEMS, STUDIO_ITEM] : ITEMS;
 
   const index = items.findIndex((item) => {
     if (!pathname.startsWith(item.path)) return false;

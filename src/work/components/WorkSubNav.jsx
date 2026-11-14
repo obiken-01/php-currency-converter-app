@@ -29,8 +29,8 @@ export default function WorkSubNav() {
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const view = searchParams.get("view") ?? "list";
-  const { allowed } = useStudioSession();
-  const tabs = allowed ? [...TABS, STUDIO_TAB] : TABS;
+  const { showTab } = useStudioSession();
+  const tabs = showTab ? [...TABS, STUDIO_TAB] : TABS;
 
   const go = (tab) => navigate(tab.view ? `${tab.path}?view=${tab.view}` : tab.path);
 

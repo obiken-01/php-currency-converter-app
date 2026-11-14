@@ -1,4 +1,4 @@
-import { Box, Stack, Typography } from "@mui/material";
+import { Box, Button, CircularProgress, Stack, Typography } from "@mui/material";
 import { useStudioSession } from "./useStudioSession";
 import { useStudio } from "./useStudio";
 import UploadStep from "./components/UploadStep";
@@ -26,11 +26,32 @@ function Studio() {
 }
 
 export default function StudioPage() {
-  const { allowed, isLoading } = useStudioSession();
+  const { status, isFetching, retry } = useStudioSession();
 
-  if (isLoading) return null;
+  if (status === "loading") return null;
 
-  if (!allowed) {
+  if (status === "unreachable") {
+    return (
+      <Box sx={{ p: 2 }}>
+        <Stack spacing={1.5} alignItems="flex-start">
+          <Typography variant="body2" color="text.secondary">
+            Can't reach Studio. Check your connection.
+          </Typography>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={retry}
+            disabled={isFetching}
+            startIcon={isFetching ? <CircularProgress size={14} color="inherit" /> : null}
+          >
+            Try again
+          </Button>
+        </Stack>
+      </Box>
+    );
+  }
+
+  if (status !== "allowed") {
     return (
       <Box sx={{ p: 2 }}>
         <Typography variant="body2" color="text.secondary">
