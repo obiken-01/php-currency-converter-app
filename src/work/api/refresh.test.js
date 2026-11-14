@@ -173,4 +173,32 @@ describe("workApi 401 handling", () => {
     expect(postSpy).toHaveBeenCalledTimes(1);
     expect(seen).toHaveLength(2);
   });
+
+  it("rejects every waiting request with the same error when the shared refresh fails", async () => {
+    store.set("work_access_token", "old");
+    store.set("work_refresh_token", "r1");
+    const failure = { response: { status: 502 } };
+    postSpy.mockRejectedValue(failure);
+    installAdapter((auth) => auth === "Bearer old");
+
+    const results = await Promise.allSettled([workApi.get("/a"), workApi.get("/b"), workApi.get("/c")]);
+
+    expect(postSpy).toHaveBeenCalledTimes(1);
+    expect(results.map((r) => r.status)).toEqual(["rejected", "rejected", "rejected"]);
+    expect(results.every((r) => r.reason === failure)).toBe(true);
+    // A 502 is not a refusal: the session survives.
+    expect(localStorage.getItem("work_refresh_token")).toBe("r1");
+  });
+
+  it("gives the caller the original 401 when there is no refresh token", async () => {
+    store.set("work_access_token", "old");
+    installAdapter(() => true);
+
+    const error = await workApi.get("/tasks").catch((e) => e);
+
+    expect(error.response.status).toBe(401);
+    expect(error.code).not.toBe("NO_REFRESH_TOKEN");
+    expect(postSpy).not.toHaveBeenCalled();
+    expect(fakeWindow.location.href).toBe("/work/login");
+  });
 });

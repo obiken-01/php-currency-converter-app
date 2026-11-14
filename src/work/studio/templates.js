@@ -4,6 +4,14 @@ import { snap, totalDuration } from "./slotEdits";
 const KEY = "studio_templates";
 const round6 = (t) => Math.round(t * 1e6) / 1e6;
 
+let counter = 0;
+/** crypto.randomUUID only exists on secure origins (not a phone on a LAN dev address). */
+function newId() {
+  if (typeof globalThis.crypto?.randomUUID === "function") return globalThis.crypto.randomUUID();
+  counter += 1;
+  return `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${counter}`;
+}
+
 /** Strip every segment to an empty slot and rebase the music so the cut starts at 0. */
 export function toTemplate(editList, name) {
   const total = totalDuration(editList);
@@ -16,7 +24,7 @@ export function toTemplate(editList, name) {
     beats: (editList.music.beats || []).map((b) => round6(b - offset)),
   };
   return {
-    id: crypto.randomUUID(),
+    id: newId(),
     name,
     savedAt: new Date().toISOString(),
     editList: {
@@ -67,6 +75,7 @@ export function saveTemplate(template) {
   return write([template, ...rest]);
 }
 
+/** Returns false when storage fails. */
 export function deleteTemplate(id) {
-  write(loadTemplates().filter((t) => t.id !== id));
+  return write(loadTemplates().filter((t) => t.id !== id));
 }

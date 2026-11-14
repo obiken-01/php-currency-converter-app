@@ -132,14 +132,6 @@ describe("createUploadQueue", () => {
     expect(calls.has("c")).toBe(false);
   });
 
-  it("revive makes a disposed queue usable again (StrictMode remount)", () => {
-    const { queue, calls } = harness();
-    queue.dispose();
-    queue.revive();
-    queue.add({ id: "a" });
-    expect(calls.has("a")).toBe(true);
-  });
-
   it("knows which ids it holds", async () => {
     const { queue, calls } = harness(1);
     queue.add({ id: "a" });

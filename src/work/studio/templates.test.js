@@ -73,6 +73,16 @@ describe("toTemplate", () => {
     expect(new Date(a.savedAt).toISOString()).toBe(a.savedAt);
     expect(DRAFT.music.fileId).toBe("up_song");
   });
+  it("still makes unique ids where crypto.randomUUID is missing (a LAN dev address over http)", () => {
+    vi.stubGlobal("crypto", {});
+    const a = toTemplate(DRAFT, "A");
+    const b = toTemplate(DRAFT, "B");
+    expect(a.id).toEqual(expect.any(String));
+    expect(a.id.length).toBeGreaterThan(0);
+    expect(a.id).not.toBe(b.id);
+    vi.stubGlobal("crypto", undefined);
+    expect(toTemplate(DRAFT, "C").id).toEqual(expect.any(String));
+  });
 });
 
 describe("template storage", () => {
@@ -116,7 +126,7 @@ describe("template storage", () => {
     const b = make("b", "2026-02-01T00:00:00.000Z");
     saveTemplate(a);
     saveTemplate(b);
-    deleteTemplate(a.id);
+    expect(deleteTemplate(a.id)).toBe(true);
     expect(loadTemplates()).toEqual([b]);
     deleteTemplate("nope");
     expect(loadTemplates()).toEqual([b]);
@@ -128,5 +138,6 @@ describe("template storage", () => {
     });
     expect(saveTemplate(make("x", "2026-01-01T00:00:00.000Z"))).toBe(false);
     expect(() => deleteTemplate("x")).not.toThrow();
+    expect(deleteTemplate("x")).toBe(false);
   });
 });

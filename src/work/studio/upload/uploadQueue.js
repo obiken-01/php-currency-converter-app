@@ -103,8 +103,5 @@ export function createUploadQueue({ run, limit = 2, onEvent }) {
       waiting.length = 0;
       for (const entry of running.values()) entry.controller.abort();
     },
-    revive() {
-      disposed = false;
-    },
   };
 }
