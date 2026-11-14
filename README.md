@@ -47,8 +47,8 @@ Try again; a browser that was allowed before keeps the tab meanwhile.
 In a production build without `VITE_STUDIO_URL`, Studio is switched off: no request is sent and
 the tab never shows. In development it falls back to `http://localhost:8000`.
 
-For the deployed site, `VITE_STUDIO_URL` is set in the Cloudflare Pages project's environment
-variables (it is read at build time, so a change needs a new build). The render service's
+For the deployed site, `VITE_STUDIO_URL` is set in Netlify (Site configuration, Environment
+variables). It is read at build time, so a change needs a new deploy. The render service's
 `CORS_ALLOWED_ORIGINS` must contain `https://tools.ralphalcaide.com`, or the browser blocks every
 Studio request.
 
