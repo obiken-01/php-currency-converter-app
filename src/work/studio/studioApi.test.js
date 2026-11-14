@@ -13,8 +13,9 @@ vi.mock("../api/workApi", () => ({
 }));
 
 const { refreshAccessToken } = await import("../api/workApi");
-const { default: studioHttp, studioApi, errorMessage, errorCode, STUDIO_URL, resolveStudioUrl, isStudioConfigured } =
-  await import("./studioApi");
+const {
+  default: studioHttp, studioApi, errorMessage, errorCode, STUDIO_URL, resolveStudioUrl, isStudioConfigured, tokenExpiry, expiresSoon,
+} = await import("./studioApi");
 
 const ok = (data = null) => Promise.resolve({ data: { data, message: null } });
 const spies = {};
@@ -55,15 +56,33 @@ describe("paths", () => {
 });
 
 describe("request options", () => {
-  it("sends chunks as raw bytes with a 180 s timeout, so a stalled chunk errors and is retried", async () => {
+  it("sends chunks as raw bytes with no total timeout, and passes the caller's abort through", async () => {
     const blob = new Blob(["x"]);
-    const signal = new AbortController().signal;
-    await studioApi.putChunk("u1", 0, blob, { signal });
+    const outer = new AbortController();
+    await studioApi.putChunk("u1", 0, blob, { signal: outer.signal });
     const [, body, config] = lastCall("put");
     expect(body).toBe(blob);
     expect(config.headers["Content-Type"]).toBe("application/octet-stream");
-    expect(config.timeout).toBe(180000);
-    expect(config.signal).toBe(signal);
+    expect(config.timeout).toBe(0);
+    expect(typeof config.onUploadProgress).toBe("function");
+    expect(config.signal.aborted).toBe(false);
+    outer.abort();
+    // The request already settled, so its listener is gone: nothing to abort.
+    expect(config.signal.aborted).toBe(false);
+  });
+
+  it("aborts the request when the caller aborts while it runs", async () => {
+    let seen = null;
+    spies.put.mockImplementation((url, body, config) => {
+      seen = config;
+      return new Promise((_, reject) => config.signal.addEventListener("abort", () => reject(new Error("canceled"))));
+    });
+    const outer = new AbortController();
+    const p = studioApi.putChunk("u1", 0, new Blob(["x"]), { signal: outer.signal });
+    outer.abort();
+    const err = await p.catch((e) => e);
+    expect(seen.signal.aborted).toBe(true);
+    expect(err.code).not.toBe("ERR_STALLED");
   });
 
   it("gives the slow calls 120 s and the rest 30 s", async () => {
@@ -142,6 +161,230 @@ describe("interceptors", () => {
     ).rejects.toMatchObject({ response: { status: 401 } });
     expect(calls).toBe(2);
     expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("token expiry", () => {
+  const b64url = (o) => Buffer.from(JSON.stringify(o)).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const jwt = (expSec) => `${b64url({ alg: "HS256" })}.${b64url({ sub: "1", exp: expSec })}.sig`;
+  const now = () => Math.floor(Date.now() / 1000);
+  const okAdapter = (seen) => (config) => {
+    seen.push(config.headers.Authorization);
+    return Promise.resolve({ status: 200, data: { data: "ok", message: null }, config, headers: {}, statusText: "" });
+  };
+
+  // Like workApi: one refresh shared by every caller until it settles.
+  let posts;
+  let fresh;
+  function singleFlight(outcome = "ok") {
+    let inFlight = null;
+    refreshAccessToken.mockImplementation(() => {
+      if (inFlight) return inFlight;
+      posts += 1;
+      inFlight = Promise.resolve()
+        .then(() => {
+          if (outcome !== "ok") throw new Error("Network Error");
+          store.token = fresh;
+          return fresh;
+        })
+        .finally(() => { inFlight = null; });
+      return inFlight;
+    });
+  }
+
+  const defaultRefresh = refreshAccessToken.getMockImplementation();
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    refreshAccessToken.mockClear();
+    posts = 0;
+    fresh = jwt(now() + 900);
+  });
+  afterEach(() => {
+    refreshAccessToken.mockImplementation(defaultRefresh);
+    store.token = "old-token";
+  });
+
+  it("reads exp from a token and tolerates garbage", () => {
+    expect(tokenExpiry(jwt(1234))).toBe(1234);
+    for (const bad of ["garbage", "a.b.c", "", null, undefined, "x.e30.y", `x.${b64url({ exp: "soon" })}.y`]) {
+      expect(tokenExpiry(bad)).toBeNull();
+    }
+    expect(expiresSoon(jwt(now() + 30))).toBe(true);
+    expect(expiresSoon(jwt(now() - 5))).toBe(true);
+    expect(expiresSoon(jwt(now() + 600))).toBe(false);
+    expect(expiresSoon("garbage")).toBe(false);
+  });
+
+  it("refreshes once before sending when the token has under 60 s left, for three parallel requests", async () => {
+    singleFlight();
+    store.token = jwt(now() + 30);
+    const seen = [];
+    const adapter = okAdapter(seen);
+    await Promise.all([
+      studioHttp.get("/projects/current", { adapter }),
+      studioHttp.get("/uploads/u1", { adapter }),
+      studioHttp.get("/renders/j1", { adapter }),
+    ]);
+    expect(posts).toBe(1);
+    expect(seen).toEqual([`Bearer ${fresh}`, `Bearer ${fresh}`, `Bearer ${fresh}`]);
+  });
+
+  it("does not refresh a token with 10 minutes left", async () => {
+    singleFlight();
+    const token = jwt(now() + 600);
+    store.token = token;
+    const seen = [];
+    await studioHttp.get("/projects/current", { adapter: okAdapter(seen) });
+    expect(refreshAccessToken).not.toHaveBeenCalled();
+    expect(seen).toEqual([`Bearer ${token}`]);
+  });
+
+  it("sends a request with a token it cannot read, without refreshing", async () => {
+    singleFlight();
+    store.token = "garbage";
+    const seen = [];
+    await studioHttp.get("/projects/current", { adapter: okAdapter(seen) });
+    expect(refreshAccessToken).not.toHaveBeenCalled();
+    expect(seen).toEqual(["Bearer garbage"]);
+  });
+
+  it("does nothing when there is no token", async () => {
+    singleFlight();
+    store.token = null;
+    const seen = [];
+    await studioHttp.get("/projects/current", { adapter: okAdapter(seen) });
+    expect(refreshAccessToken).not.toHaveBeenCalled();
+    expect(seen).toEqual([undefined]);
+  });
+
+  it("sends with the current token when the early refresh fails", async () => {
+    singleFlight("fail");
+    const token = jwt(now() + 30);
+    store.token = token;
+    const seen = [];
+    await studioHttp.get("/projects/current", { adapter: okAdapter(seen) });
+    expect(posts).toBe(1);
+    expect(seen).toEqual([`Bearer ${token}`]);
+  });
+
+  it("never refreshes early for the session check, which every Work user makes", async () => {
+    singleFlight();
+    store.token = jwt(now() + 30);
+    const seen = [];
+    const original = studioHttp.defaults.adapter;
+    studioHttp.defaults.adapter = okAdapter(seen);
+    try {
+      await studioApi.session();
+    } finally {
+      studioHttp.defaults.adapter = original;
+    }
+    expect(refreshAccessToken).not.toHaveBeenCalled();
+    expect(seen).toHaveLength(1);
+  });
+
+  it("replays a 401 with the stored token, without a refresh, when another request already refreshed", async () => {
+    singleFlight();
+    store.token = "old-token";
+    const seen = [];
+    const res = await studioHttp.get("/projects/current", {
+      adapter: (config) => {
+        seen.push(config.headers.Authorization);
+        if (seen.length === 1) {
+          // Another request refreshed while this one was on the wire.
+          store.token = "newer-token";
+          return Promise.reject(new AxiosError("fail", "ERR_BAD_REQUEST", config, null, {
+            status: 401, data: { data: null, message: "expired", code: "unauthorized" }, config, headers: {}, statusText: "",
+          }));
+        }
+        return Promise.resolve({ status: 200, data: { data: "ok", message: null }, config, headers: {}, statusText: "" });
+      },
+    });
+    expect(res.data.data).toBe("ok");
+    expect(refreshAccessToken).not.toHaveBeenCalled();
+    expect(seen).toEqual(["Bearer old-token", "Bearer newer-token"]);
+  });
+});
+
+describe("chunk stall watchdog", () => {
+  const original = studioHttp.defaults.adapter;
+  afterEach(() => {
+    vi.useRealTimers();
+    studioHttp.defaults.adapter = original;
+  });
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    store.token = "old-token";
+  });
+
+  /** An adapter that reports progress every `everyMs` (or never) and answers after `totalMs`. */
+  function slowAdapter({ everyMs, totalMs }) {
+    const state = { signal: null, aborted: false };
+    studioHttp.defaults.adapter = (config) => {
+      state.signal = config.signal;
+      return new Promise((resolve, reject) => {
+        let loaded = 0;
+        const tick = everyMs ? setInterval(() => { loaded += 1000; config.onUploadProgress?.({ loaded, total: 8000 }); }, everyMs) : null;
+        const done = setTimeout(() => {
+          clearInterval(tick);
+          resolve({ status: 200, data: { data: { received: [0] }, message: null }, config, headers: {}, statusText: "" });
+        }, totalMs);
+        config.signal.addEventListener("abort", () => {
+          state.aborted = true;
+          clearInterval(tick);
+          clearTimeout(done);
+          reject(new AxiosError("canceled", "ERR_CANCELED", config));
+        });
+      });
+    };
+    return state;
+  }
+
+  it("never aborts a chunk that keeps making progress, even past 180 s", async () => {
+    vi.useFakeTimers();
+    const state = slowAdapter({ everyMs: 10_000, totalMs: 250_000 });
+    const progress = [];
+    const p = studioApi.putChunk("u1", 0, new Blob(["x"]), { onProgress: (b) => progress.push(b) });
+    await vi.advanceTimersByTimeAsync(250_000);
+    await expect(p).resolves.toEqual({ received: [0] });
+    expect(state.aborted).toBe(false);
+    expect(progress.length).toBeGreaterThan(20);
+    expect(progress.at(-1)).toBeGreaterThan(progress[0]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("aborts a chunk with no progress for 60 s, as a network-style error with no response", async () => {
+    vi.useFakeTimers();
+    const state = slowAdapter({ everyMs: 0, totalMs: 500_000 });
+    const p = studioApi.putChunk("u1", 0, new Blob(["x"]));
+    const caught = p.catch((e) => e);
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(state.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const err = await caught;
+    expect(state.aborted).toBe(true);
+    expect(err.code).toBe("ERR_STALLED");
+    expect(err.name).not.toBe("AbortError");
+    expect(err.response).toBeUndefined();
+    expect(errorMessage(err)).toBe("Can't reach Studio. Check your connection.");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("counts the 60 s from the last progress event", async () => {
+    vi.useFakeTimers();
+    let config;
+    studioHttp.defaults.adapter = (c) => {
+      config = c;
+      return new Promise((_, reject) => c.signal.addEventListener("abort", () => reject(new AxiosError("canceled", "ERR_CANCELED", c))));
+    };
+    const caught = studioApi.putChunk("u1", 0, new Blob(["x"])).catch((e) => e);
+    await vi.advanceTimersByTimeAsync(50_000);
+    config.onUploadProgress({ loaded: 10 });
+    await vi.advanceTimersByTimeAsync(50_000);
+    expect(config.signal.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(config.signal.aborted).toBe(true);
+    expect((await caught).code).toBe("ERR_STALLED");
   });
 });
 
