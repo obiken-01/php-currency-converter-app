@@ -63,7 +63,7 @@ tools do not get heavier.
 | `studioApi.js` | HTTP client for the render service; shares the Work login token and its refresh. |
 | `useStudioSession.js` | Asks the service whether this user may use Studio. |
 | `upload/chunks.js` | Chunked, resumable uploader. |
-| `uploadQueue.js` | Runs at most two file uploads at a time. |
+| `upload/uploadQueue.js` | Runs at most two file uploads at a time. |
 | `studioState.js` | The page's state and rules, as a pure reducer. |
 | `templates.js`, `slotEdits.js` | Templates and slot-by-slot edits of a draft. |
 | `useStudio.js`, `StudioPage.jsx`, `components/` | Side effects and the four step components. |
