@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { ThemeProvider, CssBaseline, Box } from "@mui/material";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -27,6 +28,8 @@ import ProjectsPage from "./work/pages/ProjectsPage";
 import ProjectDetailPage from "./work/pages/ProjectDetailPage";
 import TokensPage from "./work/pages/TokensPage";
 import WorkDashboardPage from "./work/pages/WorkDashboardPage";
+// Studio is a private tool; keep its code out of the main bundle.
+const StudioPage = lazy(() => import("./work/studio/StudioPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -105,6 +108,7 @@ function App() {
                 <Route path="projects/:publicId" element={<ProjectDetailPage />} />
                 <Route path="timeline" element={<ProjectsPage timelineMode />} />
                 <Route path="tokens"   element={<TokensPage />} />
+                <Route path="studio"   element={<Suspense fallback={null}><StudioPage /></Suspense>} />
               </Route>
 
             </Routes>
