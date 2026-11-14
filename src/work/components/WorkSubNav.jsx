@@ -1,14 +1,13 @@
 import { Box, Stack } from "@mui/material";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { tui } from "../../theme/tuiTheme";
 import { useStudioSession } from "../studio/useStudioSession";
 
-// `view` distinguishes the two tabs that share the /work/tasks route.
+// Tasks covers both the list and board views (switched on the page itself).
 const TABS = [
   { label: "Dashboard", path: "/work",           exact: true },
   { label: "Time Logs", path: "/work/logs" },
-  { label: "Tasks",     path: "/work/tasks",     view: "list" },
-  { label: "Board",     path: "/work/tasks",     view: "board" },
+  { label: "Tasks",     path: "/work/tasks" },
   { label: "Timeline",  path: "/work/timeline" },
   { label: "Projects",  path: "/work/projects" },
 ];
@@ -16,10 +15,9 @@ const TABS = [
 // Shown only to the one account the Studio service allows.
 const STUDIO_TAB = { label: "Studio", path: "/work/studio" };
 
-function isActive(tab, pathname, view) {
+function isActive(tab, pathname) {
   if (tab.exact) return pathname === tab.path || pathname === `${tab.path}/`;
-  if (!pathname.startsWith(tab.path)) return false;
-  return tab.view ? tab.view === view : true;
+  return pathname.startsWith(tab.path);
 }
 
 // Same "[label]" solid-fill tab-bar convention as the site's TopMenu — this
@@ -27,12 +25,10 @@ function isActive(tab, pathname, view) {
 export default function WorkSubNav() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const [searchParams] = useSearchParams();
-  const view = searchParams.get("view") ?? "list";
   const { showTab } = useStudioSession();
   const tabs = showTab ? [...TABS, STUDIO_TAB] : TABS;
 
-  const go = (tab) => navigate(tab.view ? `${tab.path}?view=${tab.view}` : tab.path);
+  const go = (tab) => navigate(tab.path);
 
   return (
     <Stack
@@ -44,10 +40,10 @@ export default function WorkSubNav() {
       }}
     >
       {tabs.map((tab) => {
-        const active = isActive(tab, pathname, view);
+        const active = isActive(tab, pathname);
         return (
           <Box
-            key={`${tab.path}:${tab.view ?? ""}`}
+            key={tab.path}
             component="button"
             onClick={() => go(tab)}
             sx={{

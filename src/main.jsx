@@ -14,10 +14,14 @@ import '@fontsource/jetbrains-mono/latin-ext-700.css'
 import './index.css'
 import App from './App.jsx'
 import { requestPersistentStorage } from './lib/persistentStorage.js'
+import { receiveCarriedShoppingList } from './lib/domainMove.js'
 
 // Fire and forget — nothing renders differently either way, and the answer
 // needs to be settled before there is anything queued to lose.
 requestPersistentStorage()
+
+// Before the first render, so the shopping page reads the imported list.
+receiveCarriedShoppingList()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

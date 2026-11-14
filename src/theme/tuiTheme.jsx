@@ -7,12 +7,12 @@ import { createTheme } from "@mui/material/styles";
  * on that instead of introducing a second one.
  */
 export const tui = {
-  bg: "#0B0F14",
-  panel: "#121922",
-  border: "#232D38",
-  borderStrong: "#2F3B47",
-  text: "#DCE4EA",
-  dim: "#7C8A99",
+  bg: "#000000",
+  panel: "#0A0A0A",
+  border: "#1F1F1F",
+  borderStrong: "#2E2E2E",
+  text: "#EDEDED",
+  dim: "#A1A1A1",
   accent: "#39D97A",
   accentDim: "#1F6B41",
   amber: "#E8B23D",

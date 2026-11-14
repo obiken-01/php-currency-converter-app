@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assigneeOf, toWorkItemDto } from "./workItem";
+import { assigneeOf, linkedItemOf, linkedItemTitle, toWorkItemDto } from "./workItem";
 
 /**
  * These two helpers exist because the app and the API disagreed about the shape
@@ -80,5 +80,21 @@ describe("assigneeOf", () => {
   it("is null when nobody is assigned", () => {
     expect(assigneeOf({ assigneePublicId: null })).toBeNull();
     expect(assigneeOf(undefined)).toBeNull();
+  });
+});
+
+describe("linkedItemOf", () => {
+  it("rebuilds the picker item from the flat time-log fields", () => {
+    expect(linkedItemOf({ workItemId: "abc", workItemTitle: "V1.8.3" }))
+      .toEqual({ publicId: "abc", title: "V1.8.3" });
+  });
+
+  it("is null for an unlinked log", () => {
+    expect(linkedItemOf({ workItemId: null, workItemTitle: null })).toBeNull();
+  });
+
+  it("keeps the link visible when the title is missing", () => {
+    expect(linkedItemOf({ workItemId: "abc" }).title).toBe("(unknown task)");
+    expect(linkedItemTitle({ workItemId: "abc", workItemTitle: null })).toBe("(unknown task)");
   });
 });
