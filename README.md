@@ -35,7 +35,8 @@ The four steps on the page:
 
 The Studio tab only appears for Work users the render service allows
 (`STUDIO_ALLOWED_USER_IDS` on that service). Everyone else sees no tab, and opening the URL
-directly shows "Studio is private."
+directly shows "Studio is private." If the service cannot be reached, the page says so and offers
+Try again; a browser that was allowed before keeps the tab meanwhile.
 
 ### Configuration
 
@@ -46,6 +47,11 @@ directly shows "Studio is private."
 In a production build without `VITE_STUDIO_URL`, Studio is switched off: no request is sent and
 the tab never shows. In development it falls back to `http://localhost:8000`.
 
+For the deployed site, `VITE_STUDIO_URL` is set in the Cloudflare Pages project's environment
+variables (it is read at build time, so a change needs a new build). The render service's
+`CORS_ALLOWED_ORIGINS` must contain `https://tools.ralphalcaide.com`, or the browser blocks every
+Studio request.
+
 ### Running it locally
 
 1. Start the render service (see its README) with `CORS_ALLOWED_ORIGINS=http://localhost:5173`,
@@ -55,8 +61,10 @@ the tab never shows. In development it falls back to `http://localhost:8000`.
 
 ### Code
 
-Everything lives in `src/work/studio/` and is loaded only when the page is opened, so the other
-tools do not get heavier.
+Everything lives in `src/work/studio/`. The page itself (the steps, the uploader, the state) is
+loaded only when it is opened. The small HTTP client and the access check (`studioApi.js`,
+`useStudioSession.js`) are in the main bundle, because the Work navigation asks whether to show
+the tab.
 
 | File | What it does |
 | --- | --- |
