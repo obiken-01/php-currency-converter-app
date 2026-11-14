@@ -1,8 +1,13 @@
+import { useState } from "react";
 import {
   Alert,
   Box,
   Button,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   MenuItem,
   Stack,
   TextField,
@@ -40,7 +45,29 @@ function Choice({ label, value, values, onChange, disabled }) {
   );
 }
 
+function DeleteTemplateDialog({ open, onClose, onConfirm }) {
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle>Delete template</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" sx={{ mt: 2 }}>
+          Delete this template?
+        </Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} color="inherit">
+          Cancel
+        </Button>
+        <Button variant="contained" color="error" onClick={onConfirm}>
+          Delete
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 export default function OptionsStep({ state, templates, actions }) {
+  const [confirming, setConfirming] = useState(false);
   const enabled = inputsReady(state);
   const { options } = state;
   const working = state.drafting === "draft";
@@ -70,23 +97,45 @@ export default function OptionsStep({ state, templates, actions }) {
             helperText={state.startError ? "Use m:ss, for example 0:12." : "Optional. Where in the song to start."}
             sx={{ width: { xs: "100%", sm: 200 } }}
           />
-          <TextField
-            select
-            label="Template"
-            size="small"
-            value={options.templateId ?? ""}
-            disabled={!enabled}
-            onChange={(event) => actions.chooseTemplate(event.target.value || null)}
-            sx={{ width: { xs: "100%", sm: 240 } }}
-          >
-            <MenuItem value="">none</MenuItem>
-            {templates.map((t) => (
-              <MenuItem key={t.id} value={t.id}>
-                {t.name}
-              </MenuItem>
-            ))}
-          </TextField>
+          <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ minWidth: 0 }}>
+            <TextField
+              select
+              label="Template"
+              size="small"
+              value={options.templateId ?? ""}
+              disabled={!enabled}
+              onChange={(event) => actions.chooseTemplate(event.target.value || null)}
+              sx={{ width: { xs: "100%", sm: 240 }, minWidth: 0 }}
+            >
+              <MenuItem value="">none</MenuItem>
+              {templates.map((t) => (
+                <MenuItem key={t.id} value={t.id}>
+                  {t.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            {options.templateId && (
+              <Button
+                size="small"
+                color="error"
+                onClick={() => setConfirming(true)}
+                disabled={!enabled}
+                sx={{ flexShrink: 0, mt: 0.5 }}
+              >
+                Delete
+              </Button>
+            )}
+          </Stack>
         </Stack>
+
+        <DeleteTemplateDialog
+          open={confirming}
+          onClose={() => setConfirming(false)}
+          onConfirm={() => {
+            setConfirming(false);
+            if (options.templateId) actions.removeTemplate(options.templateId);
+          }}
+        />
 
         <Box>
           <Button

@@ -165,7 +165,7 @@ describe("interceptors", () => {
 });
 
 describe("token expiry", () => {
-  const b64url = (o) => Buffer.from(JSON.stringify(o)).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const b64url = (o) => btoa(JSON.stringify(o)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   const jwt = (expSec) => `${b64url({ alg: "HS256" })}.${b64url({ sub: "1", exp: expSec })}.sig`;
   const now = () => Math.floor(Date.now() / 1000);
   const okAdapter = (seen) => (config) => {

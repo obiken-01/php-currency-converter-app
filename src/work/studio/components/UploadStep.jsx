@@ -11,7 +11,7 @@ import {
 } from "@mui/material";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import StepCard from "./StepCard";
-import { canPick, formatSize, restartLabel, rowStatusText, usageLine } from "../studioState";
+import { KEEP_OPEN, canPick, formatSize, restartLabel, rowStatusText, uploadsActive, usageLine } from "../studioState";
 
 const ACCEPT = "video/mp4,video/quicktime,image/*,audio/*,.heic,.heif,.m4a";
 
@@ -185,6 +185,12 @@ export default function UploadStep({ state, actions }) {
               <Box key={i}>{line}</Box>
             ))}
           </Alert>
+        )}
+
+        {uploadsActive(state) && (
+          <Typography variant="caption" color="warning.main" component="div">
+            {KEEP_OPEN}
+          </Typography>
         )}
 
         {state.files.map((row) => (

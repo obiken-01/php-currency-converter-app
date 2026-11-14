@@ -30,6 +30,13 @@ import {
   usageLine,
   visualFiles,
   warningLines,
+  songSwap,
+  uploadHeldElsewhere,
+  uploadsRunning,
+  leaveGuard,
+  problemText,
+  pollOnVisible,
+  KEEP_OPEN,
 } from "./studioState";
 
 const GB = 1024 ** 3;
@@ -219,12 +226,23 @@ describe("planPick", () => {
     expect(plan.queue).toEqual([{ localId: "a", file: f, resume: { uploadId: "u9", chunkSize: 8 } }]);
   });
 
-  it("keeps one song: a second one replaces the first", () => {
+  it("keeps one song: a second one replaces the first once it is uploaded and analysed", () => {
     const s = loaded({ files: [meta("m1", "audio")] });
     const plan = planPick(s, [pick("s2", file("new.mp3"))]);
-    expect(plan.replaced.map((r) => r.localId)).toEqual(["f:m1"]);
-    const next = reducer(s, { type: "files/picked", plan });
+    expect(plan.replaced).toEqual([]);
+    expect(plan.songCandidate).toBe("s2");
+    let next = reducer(s, { type: "files/picked", plan });
+    expect(next.files.map((r) => r.localId)).toEqual(["f:m1", "s2"]);
+    expect(musicFile(next).fileId).toBe("m1");
+    next = reducer(next, { type: "upload/done", localId: "s2", meta: meta("m2", "audio") });
+    expect(musicFile(next).fileId).toBe("m1");
+    expect(songSwap(next, "m2")).toMatchObject({ candidate: true, old: [expect.objectContaining({ localId: "f:m1" })], restoreFileId: "m1" });
+    next = reducer(next, { type: "analysis/started", fileId: "m2" });
+    next = reducer(next, { type: "analysis/done", fileId: "m2", tempo: 120, durationSec: 60 });
     expect(next.files.map((r) => r.localId)).toEqual(["s2"]);
+    expect(musicFile(next).fileId).toBe("m2");
+    expect(next.songCandidate).toBeNull();
+    expect(next.analysis).toMatchObject({ fileId: "m2", status: "done" });
   });
 
   it("two songs in one pick: the last one is used and the other is named", () => {
@@ -241,13 +259,14 @@ describe("planPick", () => {
     expect(plan.replaced).toEqual([]);
   });
 
-  it("files/picked stores the notices and clears the analysis when the song is replaced", () => {
+  it("files/picked stores the notices and keeps the old song's analysis while the new one uploads", () => {
     let s = ready();
+    s = reducer(s, { type: "analysis/started", fileId: "m1" });
     s = reducer(s, { type: "analysis/done", fileId: "m1", tempo: 118.4, durationSec: 100 });
     const plan = planPick(s, [pick("x", file("bad.exe")), pick("s2", file("new.mp3"))]);
     s = reducer(s, { type: "files/picked", plan });
     expect(s.notices).toEqual(["This file can't be used: bad.exe."]);
-    expect(s.analysis).toBeNull();
+    expect(s.analysis).toMatchObject({ fileId: "m1", status: "done" });
     s = reducer(s, { type: "notices/dismissed" });
     expect(s.notices).toEqual([]);
   });
@@ -474,9 +493,13 @@ describe("draft", () => {
     expect(draftStale(s)).toBe(true);
   });
 
-  it("a new song makes the draft stale", () => {
+  it("a new song makes the draft stale once it has replaced the old one", () => {
     let s = draftOf(ready(), [videoSeg("v1", 0, 2)]);
     s = reducer(s, { type: "files/picked", plan: planPick(s, [pick("s2", file("new.mp3"))]) });
+    expect(draftStale(s)).toBe(false);
+    s = reducer(s, { type: "upload/done", localId: "s2", meta: meta("m2", "audio") });
+    s = reducer(s, { type: "analysis/started", fileId: "m2" });
+    s = reducer(s, { type: "analysis/done", fileId: "m2", tempo: 100, durationSec: 60 });
     expect(draftStale(s)).toBe(true);
   });
 
@@ -662,11 +685,11 @@ describe("fix round 1", () => {
     });
   };
 
-  it("skips a pick that matches a row still waiting, uploading or paused", () => {
+  it("skips a pick that matches a row still waiting or uploading", () => {
     const s0 = loaded();
     const f = file("a.mp4", 10);
     let s = reducer(s0, { type: "files/picked", plan: planPick(s0, [pick("a", f)]) });
-    for (const step of [null, { type: "upload/started", localId: "a" }, { type: "upload/paused", localId: "a", uploadId: "u1" }]) {
+    for (const step of [null, { type: "upload/started", localId: "a" }]) {
       if (step) s = reducer(s, step);
       const plan = planPick(s, [pick("again", file("a.mp4", 10), { uploadId: "u1", chunkSize: 8 }), pick("b", file("b.mp4", 5))]);
       expect(plan.notices).toEqual(["a.mp4 is already uploading."]);
@@ -729,5 +752,174 @@ describe("fix round 1", () => {
     s = reducer(s, { type: "job/lost", jobId: "j2" });
     expect(renderLine(jobView(s.job, null, null))).toBe(LOST_RENDER);
     expect(canRender(s, jobView(s.job, null, null))).toBe(true);
+  });
+});
+
+describe("fix wave: rows that can be retried (I2)", () => {
+  const picked = (s, ...picks) => reducer(s, { type: "files/picked", plan: planPick(s, picks) });
+
+  it("a pick matching a paused row resumes that row instead of adding one", () => {
+    let s = picked(loaded(), pick("a", file("a.mp4", 10)));
+    s = reducer(s, { type: "upload/started", localId: "a" });
+    s = reducer(s, { type: "upload/opened", localId: "a", uploadId: "u1", chunkSize: 8 });
+    s = reducer(s, { type: "upload/paused", localId: "a", uploadId: "u1" });
+    const f = file("a.mp4", 10);
+    const plan = planPick(s, [pick("again", f)]);
+    expect(plan.notices).toEqual([]);
+    expect(plan.add).toEqual([]);
+    expect(plan.queue).toEqual([{ localId: "a", file: f, resume: { uploadId: "u1", chunkSize: 8 } }]);
+    s = reducer(s, { type: "files/picked", plan });
+    expect(s.files).toHaveLength(1);
+    expect(s.files[0]).toMatchObject({ localId: "a", status: "waiting", uploadId: "u1" });
+  });
+
+  it("a pick matching an error row retries that row, with the remembered upload when there is one", () => {
+    let s = picked(loaded(), pick("a", file("a.mp4", 10)));
+    s = reducer(s, { type: "upload/failed", localId: "a", message: "No.", code: "server_error", network: false });
+    const f = file("a.mp4", 10);
+    const plan = planPick(s, [pick("again", f, { uploadId: "u7", chunkSize: 8 })]);
+    expect(plan.add).toEqual([]);
+    expect(plan.queue).toEqual([{ localId: "a", file: f, resume: { uploadId: "u7", chunkSize: 8 } }]);
+    s = reducer(s, { type: "files/picked", plan });
+    expect(s.files).toHaveLength(1);
+    expect(s.files[0]).toMatchObject({ status: "waiting", error: null, errorCode: null, uploadId: "u7" });
+  });
+
+  it("a retried row whose upload was lost or mismatched starts fresh", () => {
+    let s = loaded({ uploads: [{ uploadId: "u1", filename: "big.mp4", size: 64, kind: "video", chunkSize: 8, totalChunks: 8, received: [0] }] });
+    s = reducer(s, { type: "upload/failed", localId: "u:u1", message: "Not the same file.", code: "resume_mismatch", network: false });
+    const plan = planPick(s, [pick("again", file("big.mp4", 64))]);
+    expect(plan.queue[0]).toMatchObject({ localId: "u:u1", resume: null });
+    s = reducer(s, { type: "files/picked", plan });
+    expect(s.files[0]).toMatchObject({ status: "waiting", uploadId: null, progress: 0 });
+  });
+
+  it("new rows carry the upload they resume, and opened sets it", () => {
+    let s = picked(loaded(), pick("a", file("a.mp4", 10), { uploadId: "u9", chunkSize: 8 }), pick("b", file("b.mp4", 10)));
+    expect(s.files.map((r) => r.uploadId)).toEqual(["u9", null]);
+    s = reducer(s, { type: "upload/opened", localId: "b", uploadId: "u2", chunkSize: 8 });
+    expect(s.files[1]).toMatchObject({ uploadId: "u2", chunkSize: 8 });
+  });
+
+  it("an upload held by another live row is not cancelled", () => {
+    let s = picked(loaded(), pick("a", file("a.mp4", 10), { uploadId: "u1", chunkSize: 8 }), pick("b", file("b.mp4", 10)));
+    s = reducer(s, { type: "upload/opened", localId: "b", uploadId: "u1", chunkSize: 8 });
+    expect(uploadHeldElsewhere(s, "a", "u1")).toBe(true);
+    expect(uploadHeldElsewhere(s, "a", "u2")).toBe(false);
+    expect(uploadHeldElsewhere(s, "a", null)).toBe(false);
+    s = reducer(s, { type: "upload/failed", localId: "b", message: "x", code: null, network: false });
+    expect(uploadHeldElsewhere(s, "a", "u1")).toBe(false);
+  });
+});
+
+describe("fix wave: song replacement (M-h)", () => {
+  const swapping = () => {
+    let s = ready();
+    s = reducer(s, { type: "files/picked", plan: planPick(s, [pick("s2", file("new.mp3"))]) });
+    return s;
+  };
+
+  it("a rejected new song keeps the old one and shows the sentence on the row", () => {
+    let s = reducer(swapping(), { type: "upload/failed", localId: "s2", message: "The song is longer than 15 minutes.", code: "audio_too_long", network: false });
+    expect(s.songCandidate).toBeNull();
+    expect(musicFile(s).fileId).toBe("m1");
+    expect(s.files.find((r) => r.localId === "s2")).toMatchObject({ status: "error", error: "The song is longer than 15 minutes." });
+  });
+
+  it("a new song whose analysis fails is dropped back to an error row and the old song stays", () => {
+    let s = reducer(swapping(), { type: "upload/done", localId: "s2", meta: meta("m2", "audio") });
+    s = reducer(s, { type: "analysis/started", fileId: "m2" });
+    expect(songSwap(s, "m2").candidate).toBe(true);
+    s = reducer(s, { type: "analysis/failed", fileId: "m2", message: "No clear beat.", code: "no_beats" });
+    expect(s.songCandidate).toBeNull();
+    expect(musicFile(s).fileId).toBe("m1");
+    expect(s.files.find((r) => r.localId === "s2")).toMatchObject({ status: "error", error: "No clear beat.", meta: null });
+    expect(s.analysis).toBeNull();
+  });
+
+  it("the old song's own analysis is not a swap", () => {
+    expect(songSwap(ready(), "m1")).toEqual({ candidate: false, old: [], restoreFileId: null });
+  });
+
+  it("a third song replaces the pending one at once, still keeping the confirmed song", () => {
+    const s = swapping();
+    const plan = planPick(s, [pick("s3", file("third.mp3"))]);
+    expect(plan.replaced.map((r) => r.localId)).toEqual(["s2"]);
+    expect(plan.songCandidate).toBe("s3");
+    const next = reducer(s, { type: "files/picked", plan });
+    expect(next.files.filter((r) => r.kind === "audio").map((r) => r.localId)).toEqual(["f:m1", "s3"]);
+  });
+
+  it("the first song needs no swap", () => {
+    const s = loaded({ files: [meta("v1", "video")] });
+    const plan = planPick(s, [pick("s", file("s.mp3"))]);
+    expect(plan.songCandidate).toBeNull();
+  });
+
+  it("removing the pending song ends the swap", () => {
+    const s = reducer(swapping(), { type: "row/removed", localId: "s2" });
+    expect(s.songCandidate).toBeNull();
+    expect(musicFile(s).fileId).toBe("m1");
+  });
+});
+
+describe("fix wave: unusable files and stale rows (M-i, M-d)", () => {
+  it("an unreadable file's row is removed with the spec's notice", () => {
+    let s = reducer(loaded(), { type: "files/picked", plan: planPick(loaded(), [pick("a", file("broken.mp4"))]) });
+    s = reducer(s, { type: "upload/unusable", localId: "a" });
+    expect(s.files).toEqual([]);
+    expect(s.notices).toEqual(["This file can't be used: broken.mp4."]);
+  });
+
+  it("project/synced drops done rows the server no longer has and keeps rows in progress", () => {
+    let s = reducer(ready(), { type: "files/picked", plan: planPick(ready(), [pick("x", file("late.mp4"))]) });
+    s = reducer(s, { type: "project/synced", project: project({ files: [meta("v2", "video"), meta("m1", "audio")], usedBytes: 7 }) });
+    expect(s.files.map((r) => r.localId)).toEqual(["f:v2", "f:m1", "x"]);
+    expect(s.usedBytes).toBe(7);
+  });
+});
+
+describe("fix wave: copy and page guards", () => {
+  it("a clip simply shorter than its slot, from 0, says so (M-g)", () => {
+    const s = reducer(reducer(ready(), { type: "draft/started", mode: "draft", seed: 1 }), {
+      type: "draft/done",
+      editList: editList([videoSeg("v1", 0, 25, 0), videoSeg("v2", 25, 5, 19)]),
+      warnings: [],
+      request: draftRequest(ready(), 1),
+    });
+    const items = slotRows(s).items;
+    expect(items.map((i) => i.problem)).toEqual(["clip_too_short", "too_short"]);
+    expect(problemText("clip_too_short")).toBe("This clip is shorter than the slot. Pick another clip or skip the slot.");
+    expect(problemText("too_short")).toBe("The clip is too short from this start. Pick an earlier start.");
+  });
+
+  it("knows when uploads run and when leaving would lose work (I5)", () => {
+    expect(KEEP_OPEN).toBe("Keep this page open while files upload.");
+    let s = reducer(loaded(), { type: "files/picked", plan: planPick(loaded(), [pick("a", file("a.mp4"))]) });
+    expect(uploadsRunning(s)).toBe(false);
+    expect(leaveGuard(s)).toBe(true);
+    s = reducer(s, { type: "upload/started", localId: "a" });
+    expect(uploadsRunning(s)).toBe(true);
+    s = reducer(s, { type: "upload/paused", localId: "a", uploadId: "u1" });
+    expect(uploadsRunning(s)).toBe(false);
+    expect(leaveGuard(s)).toBe(false);
+    expect(leaveGuard({ ...ready(), rendering: true })).toBe(true);
+    expect(leaveGuard(ready())).toBe(false);
+  });
+
+  it("polls again on return only while a render is queued or running (M-e)", () => {
+    expect(pollOnVisible("queued")).toBe(true);
+    expect(pollOnVisible("running")).toBe(true);
+    for (const status of ["done", "failed", "lost", undefined]) expect(pollOnVisible(status)).toBe(false);
+  });
+});
+
+describe("fix wave: removing the old song while a new one is pending", () => {
+  it("makes the new song the music as soon as it is uploaded", () => {
+    let s = reducer(ready(), { type: "files/picked", plan: planPick(ready(), [pick("s2", file("new.mp3"))]) });
+    s = reducer(s, { type: "row/removed", localId: "f:m1" });
+    expect(s.songCandidate).toBeNull();
+    s = reducer(s, { type: "upload/done", localId: "s2", meta: meta("m2", "audio") });
+    expect(musicFile(s).fileId).toBe("m2");
   });
 });

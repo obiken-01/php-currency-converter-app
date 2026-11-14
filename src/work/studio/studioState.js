@@ -22,6 +22,7 @@ export const LOST_RENDER = "The service restarted, please render again.";
 export const GONE_RENDER = "This video is no longer on the server. Render it again.";
 export const STALE_DRAFT = "This draft is out of date. Make a new draft to render.";
 export const DRAFT_NOT_KEPT = "Drafts are not kept after a reload. Make a new draft.";
+export const KEEP_OPEN = "Keep this page open while files upload.";
 
 const GB = 1024 ** 3;
 const MB = 1024 ** 2;
@@ -37,6 +38,7 @@ const PROBLEM_TEXT = {
   empty: "Pick a clip for this slot.",
   missing_file: "This file was removed. Pick another clip.",
   too_short: "The clip is too short from this start. Pick an earlier start.",
+  clip_too_short: "This clip is shorter than the slot. Pick another clip or skip the slot.",
 };
 
 export const initialState = {
@@ -61,6 +63,9 @@ export const initialState = {
   rendering: false,
   renderError: null,
   clearing: false,
+  // The new song's row while it uploads and is analysed. Until then the
+  // confirmed song stays the music; a rejected new song never replaces it.
+  songCandidate: null,
 };
 
 // ---- rows -----------------------------------------------------------------
@@ -121,8 +126,9 @@ export function planPick(state, allPicks) {
   const queue = [];
   const claimed = new Set();
   // A file already on its way must not get a second uploader on the same upload.
+  // A paused or failed row is picked up again instead (see below).
   const busy = new Set(
-    state.files.filter((r) => ["waiting", "uploading", "paused"].includes(r.status)).map((r) => `${r.name}|${r.size}`),
+    state.files.filter((r) => ["waiting", "uploading"].includes(r.status)).map((r) => `${r.name}|${r.size}`),
   );
   const picks = [];
   for (const p of allPicks) {
@@ -148,37 +154,99 @@ export function planPick(state, allPicks) {
       notices.push(`Only one song is used, so ${p.file.name} was left out.`);
       continue;
     }
-    const match = state.files.find(
-      (r) => r.status === "interrupted" && !claimed.has(r.localId) && r.name === p.file.name && r.size === p.file.size,
-    );
+    const same = (r) => !claimed.has(r.localId) && r.name === p.file.name && r.size === p.file.size;
+    const match = state.files.find((r) => r.status === "interrupted" && same(r));
+    // The same file on a paused or failed row: that row is resumed or retried,
+    // never a second row sending the same upload.
+    const retry = match ? null : state.files.find((r) => (r.status === "paused" || r.status === "error") && r.kind === kind && same(r));
     let localId;
     let resume;
     if (match) {
       claimed.add(match.localId);
       localId = match.localId;
       resume = { uploadId: match.uploadId, chunkSize: match.chunkSize };
+    } else if (retry) {
+      claimed.add(retry.localId);
+      localId = retry.localId;
+      const lost = retry.errorCode === "resume_mismatch" || retry.errorCode === "unknown_upload";
+      const chunkSize = retry.chunkSize ?? state.limits?.chunkSize;
+      const own = !lost && retry.uploadId && chunkSize ? { uploadId: retry.uploadId, chunkSize } : null;
+      resume = p.remembered ?? own;
     } else {
       localId = p.localId;
       resume = p.remembered ?? null;
-      add.push(baseRow({ localId, name: p.file.name, size: p.file.size, kind }));
+      add.push(baseRow({ localId, name: p.file.name, size: p.file.size, kind, uploadId: resume?.uploadId ?? null, chunkSize: resume?.chunkSize ?? null }));
     }
     queue.push({ localId, file: p.file, resume });
     if (p === song) songRowId = localId;
   }
 
-  const replaced = song ? state.files.filter((r) => r.kind === "audio" && r.localId !== songRowId) : [];
-  return { notices, add, requeue: [...claimed], queue, replaced };
+  // The confirmed song stays until the new one is uploaded and analysed;
+  // any other song row (one still uploading, failed, or pending) goes now.
+  const confirmed = song ? confirmedSong(state) : null;
+  const replaced = song ? state.files.filter((r) => r.kind === "audio" && r.localId !== songRowId && r !== confirmed) : [];
+  const songCandidate = song ? (confirmed && confirmed.localId !== songRowId ? songRowId : null) : undefined;
+  return { notices, add, requeue: [...claimed], queue, replaced, songCandidate };
 }
+
+/** The song in use: the last finished song row that is not a pending replacement. */
+function confirmedSong(state) {
+  const songs = state.files.filter((r) => r.kind === "audio" && r.status === "done" && r.meta && r.localId !== state.songCandidate);
+  return songs.length > 0 ? songs[songs.length - 1] : null;
+}
+
+const candidateRow = (state) => (state.songCandidate ? state.files.find((r) => r.localId === state.songCandidate) ?? null : null);
+
+/**
+ * What an analysis of fileId means for the song. candidate: it is the new
+ * song's; old: the rows it replaces once it succeeds (to delete on the
+ * server); restoreFileId: the song to analyse again if it fails.
+ */
+export function songSwap(state, fileId) {
+  const row = candidateRow(state);
+  if (!row || row.meta?.fileId !== fileId) return { candidate: false, old: [], restoreFileId: null };
+  const old = state.files.filter((r) => r.kind === "audio" && r.localId !== row.localId);
+  return { candidate: true, old, restoreFileId: confirmedSong(state)?.meta?.fileId ?? null };
+}
+
+/** Clears the pending song when its row is no longer pending. */
+function settleCandidate(state) {
+  const row = candidateRow(state);
+  // Gone, failed, or nothing left to replace: no longer pending.
+  if (state.songCandidate && (!row || row.status === "error" || !confirmedSong(state))) return { ...state, songCandidate: null };
+  return state;
+}
+
+const LIVE = ["waiting", "uploading", "paused", "interrupted"];
+
+/** Another row that can still send to this upload holds it: it must not be cancelled. */
+export function uploadHeldElsewhere(state, localId, uploadId) {
+  if (!uploadId) return false;
+  return state.files.some((r) => r.localId !== localId && r.uploadId === uploadId && LIVE.includes(r.status));
+}
+
+/** A file is being sent right now (the screen should stay on). */
+export const uploadsRunning = (state) => state.files.some((r) => r.status === "uploading");
+
+/** Files are waiting to upload or uploading (the Upload step asks to keep the page open). */
+export const uploadsActive = (state) => state.files.some((r) => r.status === "waiting" || r.status === "uploading");
+
+/** Leaving the page now would stop an upload or a render being submitted. */
+export const leaveGuard = (state) => state.rendering || uploadsActive(state);
+
+/** Poll a render again when the page becomes visible: only while it can still change. */
+export const pollOnVisible = (status) => ACTIVE.includes(status);
 
 const patchRow = (state, localId, patch) => {
   if (!state.files.some((r) => r.localId === localId)) return state;
   return { ...state, files: state.files.map((r) => (r.localId === localId ? { ...r, ...patch } : r)) };
 };
 
-/** Drop the analysis when its song is no longer the music. */
+/** Drop the analysis when its song is neither the music nor the pending new song. */
 function keepAnalysis(state) {
   const music = musicFile(state);
-  if (state.analysis && state.analysis.fileId !== music?.fileId) return { ...state, analysis: null };
+  const pending = candidateRow(state)?.meta?.fileId;
+  if (state.analysis && state.analysis.fileId !== music?.fileId && state.analysis.fileId !== pending) return { ...state, analysis: null };
   return state;
 }
 
@@ -203,10 +271,9 @@ export function musicRow(state) {
   return songs.length > 0 ? songs[songs.length - 1] : null;
 }
 
-/** The song's file metadata once it is uploaded, else null. */
+/** The song in use: its file metadata once uploaded (a pending replacement does not count), else null. */
 export function musicFile(state) {
-  const songs = doneRows(state).filter((r) => r.kind === "audio");
-  return songs.length > 0 ? songs[songs.length - 1].meta : null;
+  return confirmedSong(state)?.meta ?? null;
 }
 
 /** At least one video or photo and the song, all uploaded. */
@@ -276,7 +343,10 @@ export function slotRows(state) {
   const list = state.draft ? state.draft.editList : state.templateList;
   if (!list) return null;
   const byId = filesById(state);
-  const problems = new Map(slotProblems(list, byId).map((p) => [p.index, p.reason]));
+  // From 0 the clip is simply shorter than the slot: an earlier start cannot help.
+  const reasonFor = (p) =>
+    p.reason === "too_short" && (list.timeline[p.index].source?.inSec ?? 0) <= 1e-6 ? "clip_too_short" : p.reason;
+  const problems = new Map(slotProblems(list, byId).map((p) => [p.index, reasonFor(p)]));
   return {
     preview: !state.draft,
     editList: list,
@@ -392,6 +462,7 @@ export function reducer(state, action) {
         limits: action.project.limits ?? null,
         usedBytes: action.project.usedBytes ?? 0,
         files: snap.files,
+        songCandidate: null,
         job: snap.job ? { ...snap.job, restored: true, lost: false } : null,
         restored: snap.files.length > 0 || snap.job !== null,
       };
@@ -411,17 +482,35 @@ export function reducer(state, action) {
       const { plan } = action;
       const replaced = new Set(plan.replaced.map((r) => r.localId));
       const requeued = new Set(plan.requeue);
+      const resumeOf = new Map(plan.queue.map((q) => [q.localId, q.resume]));
+      const requeue = (r) => {
+        const resume = resumeOf.get(r.localId) ?? null;
+        return {
+          ...r,
+          status: "waiting",
+          error: null,
+          errorCode: null,
+          network: false,
+          meta: null,
+          uploadId: resume?.uploadId ?? null,
+          chunkSize: resume?.chunkSize ?? null,
+          progress: resume ? r.progress : 0,
+        };
+      };
       const files = state.files
         .filter((r) => !replaced.has(r.localId))
-        .map((r) => (requeued.has(r.localId) ? { ...r, status: "waiting", error: null, errorCode: null, network: false } : r))
+        .map((r) => (requeued.has(r.localId) ? requeue(r) : r))
         .concat(plan.add);
-      return keepAnalysis({ ...state, files, notices: plan.notices });
+      const songCandidate = plan.songCandidate === undefined ? state.songCandidate : plan.songCandidate;
+      return keepAnalysis(settleCandidate({ ...state, files, notices: plan.notices, songCandidate }));
     }
     case "notices/dismissed":
       return { ...state, notices: [] };
 
     case "upload/started":
       return patchRow(state, action.localId, { status: "uploading", error: null, errorCode: null, network: false });
+    case "upload/opened":
+      return patchRow(state, action.localId, { uploadId: action.uploadId, chunkSize: action.chunkSize ?? null });
     case "upload/progress":
       return patchRow(state, action.localId, { progress: action.progress });
     case "upload/done":
@@ -436,12 +525,25 @@ export function reducer(state, action) {
     case "upload/paused":
       return patchRow(state, action.localId, { status: "paused", uploadId: action.uploadId });
     case "upload/failed":
-      return patchRow(state, action.localId, {
-        status: "error",
-        error: action.message,
-        errorCode: action.code ?? null,
-        network: Boolean(action.network),
-      });
+      return settleCandidate(
+        patchRow(state, action.localId, {
+          status: "error",
+          error: action.message,
+          errorCode: action.code ?? null,
+          network: Boolean(action.network),
+        }),
+      );
+    case "upload/unusable": {
+      const row = state.files.find((r) => r.localId === action.localId);
+      if (!row) return state;
+      return keepAnalysis(
+        settleCandidate({
+          ...state,
+          files: state.files.filter((r) => r.localId !== action.localId),
+          notices: [...state.notices, `This file can't be used: ${row.name}.`],
+        }),
+      );
+    }
     case "upload/requeued":
       return patchRow(state, action.localId, {
         status: "waiting",
@@ -454,16 +556,48 @@ export function reducer(state, action) {
       return patchRow(state, action.localId, { busy: action.busy });
     case "row/removed":
       if (!state.files.some((r) => r.localId === action.localId)) return state;
-      return keepAnalysis({ ...state, files: state.files.filter((r) => r.localId !== action.localId) });
+      return keepAnalysis(settleCandidate({ ...state, files: state.files.filter((r) => r.localId !== action.localId) }));
+    case "project/synced": {
+      // A file the server no longer has (expired, or removed elsewhere) leaves the list.
+      const ids = new Set((action.project?.files ?? []).map((f) => f.fileId));
+      const files = state.files.filter((r) => !(r.status === "done" && r.meta && !ids.has(r.meta.fileId)));
+      return keepAnalysis(
+        settleCandidate({
+          ...state,
+          files,
+          usedBytes: action.project?.usedBytes ?? state.usedBytes,
+          limits: action.project?.limits ?? state.limits,
+        }),
+      );
+    }
 
     case "analysis/started":
       return { ...state, analysis: { fileId: action.fileId, status: "working", tempo: null, error: null } };
-    case "analysis/done":
+    case "analysis/done": {
       if (state.analysis?.fileId !== action.fileId) return state;
-      return { ...state, analysis: { fileId: action.fileId, status: "done", tempo: action.tempo, error: null } };
-    case "analysis/failed":
+      const analysis = { fileId: action.fileId, status: "done", tempo: action.tempo, error: null };
+      const swap = songSwap(state, action.fileId);
+      if (!swap.candidate) return { ...state, analysis };
+      // The new song is good: it replaces the old one now.
+      const old = new Set(swap.old.map((r) => r.localId));
+      return { ...state, analysis, songCandidate: null, files: state.files.filter((r) => !old.has(r.localId)) };
+    }
+    case "analysis/failed": {
       if (state.analysis?.fileId !== action.fileId) return state;
+      if (songSwap(state, action.fileId).candidate) {
+        // The new song was rejected: the old one stays, the new row says why.
+        const next = patchRow(state, state.songCandidate, {
+          status: "error",
+          error: action.message,
+          errorCode: action.code ?? null,
+          network: false,
+          meta: null,
+          progress: 0,
+        });
+        return { ...next, songCandidate: null, analysis: null };
+      }
       return { ...state, analysis: { fileId: action.fileId, status: "error", tempo: null, error: action.message } };
+    }
 
     case "options/changed":
       return { ...state, options: { ...state.options, [action.key]: action.value } };

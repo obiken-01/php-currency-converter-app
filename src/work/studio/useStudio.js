@@ -6,10 +6,27 @@ import { useToast } from "../context/toastContext";
 import { errorCode, errorMessage, studioApi } from "./studioApi";
 import { findInterrupted, forgetAllUploads, forgetUpload, kindOf, uploadFile } from "./upload/chunks";
 import { createUploadQueue } from "./upload/uploadQueue";
-import { loadTemplates, saveTemplate, toTemplate } from "./templates";
-import { MAX_PARALLEL_UPLOADS, canPick, draftRequest, initialState, jobView, planPick, projectSnapshot, reducer } from "./studioState";
+import { deleteTemplate, loadTemplates, saveTemplate, toTemplate } from "./templates";
+import {
+  MAX_PARALLEL_UPLOADS,
+  canPick,
+  draftRequest,
+  initialState,
+  jobView,
+  leaveGuard,
+  planPick,
+  pollOnVisible,
+  projectSnapshot,
+  reducer,
+  songSwap,
+  uploadHeldElsewhere,
+  uploadsRunning,
+} from "./studioState";
 
 const POLL_MS = 2000;
+
+/** complete refused the file itself: the row goes and a notice names it. */
+const UNUSABLE = ["unreadable_file", "unsupported_type"];
 
 /** A random 31-bit integer. */
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
@@ -23,18 +40,6 @@ const ignore404 = (promise) =>
     if (error?.response?.status !== 404) throw error;
   });
 
-function runAnalysis(fileId, dispatch, alive) {
-  dispatch({ type: "analysis/started", fileId });
-  studioApi.analyze(fileId).then(
-    (result) => {
-      if (alive.current) dispatch({ type: "analysis/done", fileId, tempo: result.tempo, durationSec: result.durationSec });
-    },
-    (error) => {
-      if (alive.current) dispatch({ type: "analysis/failed", fileId, message: errorMessage(error) });
-    },
-  );
-}
-
 /** Refreshes "x of y GB used" after the project changed. Failures are not worth a message. */
 function refreshUsage(dispatch, alive) {
   studioApi.project().then(
@@ -45,8 +50,63 @@ function refreshUsage(dispatch, alive) {
   );
 }
 
+/** Keeps the screen on while files upload. Feature-detected; any failure is ignored. */
+function useWakeLock(active) {
+  useEffect(() => {
+    if (!active || typeof navigator === "undefined" || typeof navigator.wakeLock?.request !== "function") return undefined;
+    let lock = null;
+    let asking = false;
+    let stopped = false;
+    const acquire = () => {
+      if (stopped || asking || document.visibilityState !== "visible" || (lock && !lock.released)) return;
+      asking = true;
+      navigator.wakeLock.request("screen").then(
+        (next) => {
+          asking = false;
+          if (stopped) next.release().catch(() => {});
+          else lock = next;
+        },
+        () => {
+          asking = false;
+        },
+      );
+    };
+    // The browser drops the lock when the page is hidden; take it again on return.
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") acquire();
+    };
+    acquire();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stopped = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (lock && !lock.released) lock.release().catch(() => {});
+    };
+  }, [active]);
+}
+
+/** Asks before the tab is closed or reloaded while work would be lost. */
+function useLeaveGuard(active) {
+  useEffect(() => {
+    if (!active) return undefined;
+    const onBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [active]);
+}
+
 export function useStudio() {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, rawDispatch] = useReducer(reducer, initialState);
+  // The same reducer applied to a ref as each action is sent, so async
+  // handlers read the state as of the last action, not of the last render.
+  const stateRef = useRef(initialState);
+  const dispatch = (action) => {
+    stateRef.current = reducer(stateRef.current, action);
+    rawDispatch(action);
+  };
   const toast = useToast();
   const alive = useRef(true);
   const files = useRef(new Map()); // localId -> File, for rows picked in this visit
@@ -69,7 +129,8 @@ export function useStudio() {
     alive.current = true;
     const queue = createUploadQueue({
       limit: MAX_PARALLEL_UPLOADS,
-      run: (item, { signal, onProgress }) => uploadFile(item.file, { signal, onProgress, resume: item.resume ?? undefined }),
+      run: (item, { signal, onProgress, onOpened }) =>
+        uploadFile(item.file, { signal, onProgress, onOpened, resume: item.resume ?? undefined }),
       onEvent: (event) => onEvent.current?.(event),
     });
     queueRef.current = queue;
@@ -77,23 +138,6 @@ export function useStudio() {
       alive.current = false;
       queue.dispose();
     };
-  }, []);
-
-  // Load the project once, also under StrictMode's double effect.
-  useEffect(() => {
-    if (loadStarted.current) return;
-    loadStarted.current = true;
-    studioApi.project().then(
-      (project) => {
-        if (!alive.current) return;
-        dispatch({ type: "project/loaded", project });
-        const { musicFileId } = projectSnapshot(project);
-        if (musicFileId) runAnalysis(musicFileId, dispatch, alive);
-      },
-      (error) => {
-        if (alive.current) dispatch({ type: "project/failed", message: errorMessage(error) });
-      },
-    );
   }, []);
 
   const send = (action) => {
@@ -105,11 +149,72 @@ export function useStudio() {
     info: (m) => alive.current && toast.info(m),
   };
 
+  /**
+   * Beat analysis. For a new song that replaces another, success removes the
+   * old song (here and on the server); failure keeps the old song, drops the
+   * new file and analyses the old song again.
+   */
+  function analyse(fileId) {
+    send({ type: "analysis/started", fileId });
+    studioApi.analyze(fileId).then(
+      (result) => {
+        if (!alive.current) return;
+        const swap = songSwap(stateRef.current, fileId);
+        dispatch({ type: "analysis/done", fileId, tempo: result.tempo, durationSec: result.durationSec });
+        for (const row of swap.old) {
+          discardOnServer(row).then(
+            () => refreshUsage(send, alive),
+            (error) => say.error(errorMessage(error)),
+          );
+        }
+      },
+      (error) => {
+        if (!alive.current) return;
+        const swap = songSwap(stateRef.current, fileId);
+        dispatch({ type: "analysis/failed", fileId, message: errorMessage(error), code: errorCode(error) });
+        if (swap.candidate) {
+          ignore404(studioApi.deleteFile(fileId)).then(() => refreshUsage(send, alive), () => {});
+          if (swap.restoreFileId) analyse(swap.restoreFileId);
+        }
+      },
+    );
+  }
+
+  // Load the project once, also under StrictMode's double effect.
+  useEffect(() => {
+    if (loadStarted.current) return;
+    loadStarted.current = true;
+    studioApi.project().then(
+      (project) => {
+        if (!alive.current) return;
+        dispatch({ type: "project/loaded", project });
+        const { musicFileId } = projectSnapshot(project);
+        if (musicFileId) analyse(musicFileId);
+      },
+      (error) => {
+        if (alive.current) dispatch({ type: "project/failed", message: errorMessage(error) });
+      },
+    );
+    // analyse only uses refs and stable helpers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** The server answered unknown_file: reload the list so it matches the server. */
+  function syncProject() {
+    studioApi.project().then(
+      (project) => send({ type: "project/synced", project }),
+      () => {},
+    );
+  }
+
   function handleQueueEvent(event) {
     const { id } = event;
     switch (event.type) {
       case "started":
         send({ type: "upload/started", localId: id });
+        break;
+      case "opened":
+        send({ type: "upload/opened", localId: id, uploadId: event.uploadId, chunkSize: event.chunkSize });
         break;
       case "progress":
         send({ type: "upload/progress", localId: id, progress: event.progress });
@@ -118,7 +223,7 @@ export function useStudio() {
         files.current.delete(id);
         completed.current.set(id, event.meta);
         send({ type: "upload/done", localId: id, meta: event.meta });
-        if (event.meta?.kind === "audio") runAnalysis(event.meta.fileId, send, alive);
+        if (event.meta?.kind === "audio" && alive.current) analyse(event.meta.fileId);
         refreshUsage(send, alive);
         break;
       case "failed": {
@@ -127,8 +232,14 @@ export function useStudio() {
           send({ type: "upload/paused", localId: id, uploadId: error.uploadId });
           break;
         }
-        const mismatch = error?.code === "resume_mismatch";
         const file = files.current.get(id);
+        if (UNUSABLE.includes(errorCode(error))) {
+          if (file) forgetUpload(file);
+          files.current.delete(id);
+          send({ type: "upload/unusable", localId: id });
+          break;
+        }
+        const mismatch = error?.code === "resume_mismatch";
         if (mismatch && file) forgetUpload(file);
         send({
           type: "upload/failed",
@@ -175,6 +286,8 @@ export function useStudio() {
       if (result.status === "failed" && result.error?.uploadId) uploadId = result.error.uploadId;
     }
     if (!uploadId && file) uploadId = findInterrupted(file)?.uploadId ?? null;
+    // Another row is still sending to this upload: leave it alone.
+    if (uploadHeldElsewhere(stateRef.current, row.localId, uploadId)) return;
     if (file) forgetUpload(file);
     if (uploadId) await ignore404(studioApi.cancelUpload(uploadId));
   }
@@ -188,7 +301,8 @@ export function useStudio() {
       return { localId: newLocalId(), file, kind, remembered: kind ? findInterrupted(file) : null };
     });
     if (picks.length === 0) return;
-    const plan = planPick(state, picks);
+    const plan = planPick(stateRef.current, picks);
+    // Picked first, so a replaced row's upload is checked against the new rows.
     dispatch({ type: "files/picked", plan });
     for (const row of plan.replaced) {
       discardOnServer(row).then(
@@ -230,7 +344,9 @@ export function useStudio() {
     if (!file) return;
     if (row.errorCode === "resume_mismatch" || row.errorCode === "unknown_upload") {
       forgetUpload(file);
-      if (row.uploadId) studioApi.cancelUpload(row.uploadId).catch(() => {});
+      if (row.uploadId && !uploadHeldElsewhere(stateRef.current, row.localId, row.uploadId)) {
+        studioApi.cancelUpload(row.uploadId).catch(() => {});
+      }
       dispatch({ type: "upload/requeued", localId: row.localId, fresh: true });
       enqueue(row.localId, file, null);
       return;
@@ -247,7 +363,10 @@ export function useStudio() {
     dispatch({ type: "draft/started", mode, seed });
     studioApi.draft(request).then(
       (result) => send({ type: "draft/done", editList: result.editList, warnings: result.warnings, request }),
-      (error) => send({ type: "draft/failed", message: errorMessage(error) }),
+      (error) => {
+        send({ type: "draft/failed", message: errorMessage(error) });
+        if (errorCode(error) === "unknown_file") syncProject();
+      },
     );
   }
 
@@ -268,6 +387,17 @@ export function useStudio() {
     return ok;
   }
 
+  function removeTemplate(id) {
+    const ok = deleteTemplate(id);
+    setTemplates(loadTemplates());
+    if (!ok) {
+      say.error("Could not delete the template on this device.");
+      return;
+    }
+    if (state.options.templateId === id) dispatch({ type: "template/chosen", template: null });
+    say.success("Template deleted.");
+  }
+
   // ---- step 4 -------------------------------------------------------------
 
   const jobId = state.job?.jobId ?? null;
@@ -281,7 +411,12 @@ export function useStudio() {
       const status = query.state.data?.status;
       return status === "done" || status === "failed" ? false : POLL_MS;
     },
-    refetchOnWindowFocus: false,
+    // Polling stops after failed polls; coming back to the page tries again
+    // while the render can still change.
+    refetchOnWindowFocus: (query) => {
+      if (stateRef.current.job?.lost || errorCode(query.state.error) === "unknown_render") return false;
+      return pollOnVisible(query.state.data?.status ?? stateRef.current.job?.status);
+    },
     staleTime: 0,
     gcTime: 0,
   });
@@ -293,7 +428,10 @@ export function useStudio() {
     dispatch({ type: "render/started" });
     studioApi.createRender(state.draft.editList).then(
       (result) => send({ type: "render/created", jobId: result.jobId }),
-      (error) => send({ type: "render/failed", message: errorMessage(error) }),
+      (error) => {
+        send({ type: "render/failed", message: errorMessage(error) });
+        if (errorCode(error) === "unknown_file") syncProject();
+      },
     );
   }
 
@@ -351,6 +489,11 @@ export function useStudio() {
     }
   }
 
+  // ---- protecting running work -------------------------------------------
+
+  useLeaveGuard(leaveGuard(state));
+  useWakeLock(uploadsRunning(state));
+
   return {
     state,
     job,
@@ -365,6 +508,7 @@ export function useStudio() {
       setOption: (key, value) => dispatch({ type: "options/changed", key, value }),
       setStart: (text) => dispatch({ type: "start/changed", text }),
       chooseTemplate,
+      removeTemplate,
       makeDraft: () => makeDraft("draft"),
       reshuffle: () => makeDraft("reshuffle"),
       autofill: () => makeDraft("autofill"),
