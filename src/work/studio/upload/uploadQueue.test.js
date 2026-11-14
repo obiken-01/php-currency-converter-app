@@ -5,9 +5,9 @@ import { createUploadQueue } from "./uploadQueue";
 function harness(limit = 2) {
   const calls = new Map();
   const events = [];
-  const run = (item, { signal, onProgress }) =>
+  const run = (item, { signal, onProgress, onOpened }) =>
     new Promise((resolve, reject) => {
-      calls.set(item.id, { item, signal, onProgress, resolve, reject });
+      calls.set(item.id, { item, signal, onProgress, onOpened, resolve, reject });
       signal.addEventListener("abort", () => {
         const error = new Error("Upload aborted");
         error.name = "AbortError";
@@ -47,6 +47,18 @@ describe("createUploadQueue", () => {
     queue.add({ id: "a" });
     calls.get("a").onProgress(0.5);
     expect(events).toContainEqual({ type: "progress", id: "a", progress: 0.5 });
+  });
+
+  it("reports the upload id once it is open, but not for a cancelled item", async () => {
+    const { queue, calls, events } = harness();
+    queue.add({ id: "a" });
+    queue.add({ id: "b" });
+    calls.get("a").onOpened("u1", 8);
+    expect(events).toContainEqual({ type: "opened", id: "a", uploadId: "u1", chunkSize: 8 });
+    const cancelled = queue.cancel("b");
+    calls.get("b").onOpened("u2", 8);
+    await cancelled;
+    expect(events.some((e) => e.id === "b" && e.type === "opened")).toBe(false);
   });
 
   it("passes the item through to run", () => {

@@ -55,10 +55,23 @@ function abortError() {
 const statusOf = (error) => error?.response?.status ?? null;
 const isUnknownUpload = (error) => statusOf(error) === 404;
 
-/** Network errors and 5xx may be retried; any 4xx may not. */
+/**
+ * Network errors (a stalled chunk included) and 5xx may be retried. So may a
+ * 401 that survived the refresh: the refresh failed for a passing reason (a
+ * refusal already sends the user to the login page). Any other 4xx may not.
+ */
 function isRetryable(error) {
   const status = statusOf(error);
-  return status === null || status >= 500;
+  return status === null || status === 401 || status >= 500;
+}
+
+/**
+ * The finished file whose id is this upload's id (fileId equals uploadId), or
+ * null when the project does not hold it. Throws when the project cannot be read.
+ */
+async function findFinished(api, uploadId) {
+  const project = await api.project();
+  return (project?.files ?? []).find((f) => f.fileId === uploadId) ?? null;
 }
 
 /** A timer wait that rejects at once when the signal aborts. */
@@ -156,6 +169,10 @@ async function openUpload(file, api, resume) {
       status = await api.uploadStatus(resume.uploadId);
     } catch (error) {
       if (!isUnknownUpload(error)) throw error;
+      // Gone: maybe because it was completed and only the answer was lost.
+      // If the project cannot be read, fail rather than risk a second copy.
+      const finished = await findFinished(api, resume.uploadId);
+      if (finished) return { finished };
     }
     if (status) {
       const chunkSize = resume.chunkSize;
@@ -180,10 +197,11 @@ async function openUpload(file, api, resume) {
 
 /**
  * resume is { uploadId, chunkSize } from findInterrupted or the service's project listing.
- * A 404 unknown_upload from complete on a resume means start over; a network error during
- * complete is not retried (complete consumes the upload id).
+ * When complete gets no answer or a 404, or a resume finds its upload gone, the
+ * project is checked for a finished file with the upload's id, which is then
+ * returned instead of failing or uploading the file a second time.
  */
-export async function uploadFile(file, { api = studioApi, onProgress, signal, resume } = {}) {
+export async function uploadFile(file, { api = studioApi, onProgress, onOpened, signal, resume } = {}) {
   if (signal?.aborted) throw abortError();
 
   // One internal controller: an outside abort or a permanent failure stops
@@ -195,7 +213,13 @@ export async function uploadFile(file, { api = studioApi, onProgress, signal, re
   try {
     const upload = await openUpload(file, api, resume);
     if (stop.signal.aborted) throw abortError();
+    if (upload.finished) {
+      forgetUpload(file);
+      onProgress?.(1);
+      return upload.finished;
+    }
     const { uploadId, chunkSize, totalChunks } = upload;
+    onOpened?.(uploadId, chunkSize);
 
     const chunks = planChunks(file.size, chunkSize);
     if (chunks.length !== totalChunks) {
@@ -204,33 +228,58 @@ export async function uploadFile(file, { api = studioApi, onProgress, signal, re
     rememberUpload(file, uploadId, chunkSize);
 
     let doneBytes = 0;
+    const inFlight = new Map(); // chunk n -> bytes of it sent so far, this attempt
     let lastReported = 0;
-    // Chunks alone never reach 1: completing (probing the file) is still ahead.
-    const report = (fraction) => {
-      const capped = Math.min(fraction, 0.99);
+    let lastEmitted = -1;
+    // Finished chunks plus the bytes in flight. Never backwards (a retried
+    // chunk starts again from 0), and below 1 until complete has answered:
+    // completing (probing the file) is still ahead. Progress events come
+    // many times a second, so only steps of 0.1% are passed on.
+    const report = (force) => {
+      if (!(file.size > 0)) return;
+      let bytes = doneBytes;
+      for (const b of inFlight.values()) bytes += b;
+      const capped = Math.min(bytes / file.size, 0.99);
       if (capped > lastReported) lastReported = capped;
-      onProgress?.(lastReported);
+      if (force || lastReported - lastEmitted >= 0.001) {
+        lastEmitted = lastReported;
+        onProgress?.(lastReported);
+      }
     };
     const pending = [];
     for (const chunk of chunks) {
       if (upload.received.has(chunk.n)) doneBytes += chunk.end - chunk.start;
       else pending.push(chunk);
     }
-    if (doneBytes > 0 && file.size > 0) report(doneBytes / file.size);
+    if (doneBytes > 0) report(true);
 
     let failure = null;
 
     async function sendChunk(chunk) {
+      const length = chunk.end - chunk.start;
       for (let attempt = 0; ; attempt += 1) {
+        let live = true;
+        inFlight.set(chunk.n, 0);
+        const onChunkProgress = (loaded) => {
+          if (!live || stop.signal.aborted) return;
+          inFlight.set(chunk.n, Math.min(Math.max(0, Number(loaded) || 0), length));
+          report(false);
+        };
         try {
           // Sliced per attempt and dropped after: at most CONCURRENCY slices live.
-          await api.putChunk(uploadId, chunk.n, file.slice(chunk.start, chunk.end), { signal: stop.signal });
+          await api.putChunk(uploadId, chunk.n, file.slice(chunk.start, chunk.end), {
+            signal: stop.signal,
+            onProgress: onChunkProgress,
+          });
           return;
         } catch (error) {
           if (stop.signal.aborted) throw abortError();
           if (!isRetryable(error)) throw error;
           if (attempt >= RETRIES) throw new UploadPausedError(uploadId, error);
           await wait(BACKOFF_MS[attempt], stop.signal);
+        } finally {
+          live = false;
+          inFlight.delete(chunk.n);
         }
       }
     }
@@ -248,7 +297,7 @@ export async function uploadFile(file, { api = studioApi, onProgress, signal, re
           return;
         }
         doneBytes += chunk.end - chunk.start;
-        report(doneBytes / file.size);
+        report(true);
       }
     }
 
@@ -264,8 +313,16 @@ export async function uploadFile(file, { api = studioApi, onProgress, signal, re
     try {
       meta = await api.completeUpload(uploadId);
     } catch (error) {
-      if (isUnknownUpload(error)) forgetUpload(file);
-      throw error;
+      // No answer, or the id is already consumed: the file may be finished
+      // and only the answer lost. Then it is in the project under this id.
+      if (!error?.response || isUnknownUpload(error)) {
+        const finished = await findFinished(api, uploadId).catch(() => null);
+        if (finished) meta = finished;
+      }
+      if (!meta) {
+        if (isUnknownUpload(error)) forgetUpload(file);
+        throw error;
+      }
     }
     forgetUpload(file);
     onProgress?.(1);

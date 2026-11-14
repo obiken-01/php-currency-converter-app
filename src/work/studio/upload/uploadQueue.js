@@ -1,7 +1,7 @@
 // Runs uploads a few at a time, in the order they were added. No React here.
 //
-// run(item, { signal, onProgress }) returns a promise for the file's metadata.
-// onEvent receives { type: "started" | "progress" | "done" | "failed", id, ... }.
+// run(item, { signal, onProgress, onOpened }) returns a promise for the file's metadata.
+// onEvent receives { type: "started" | "opened" | "progress" | "done" | "failed", id, ... }.
 // An item that was cancelled, or a queue that was disposed, emits nothing more,
 // so a page that has gone away is never told about an upload.
 
@@ -25,6 +25,7 @@ export function createUploadQueue({ run, limit = 2, onEvent }) {
         run(item, {
           signal: controller.signal,
           onProgress: (progress) => emit({ type: "progress", id, progress }),
+          onOpened: (uploadId, chunkSize) => emit({ type: "opened", id, uploadId, chunkSize }),
         }),
       );
     } catch (error) {

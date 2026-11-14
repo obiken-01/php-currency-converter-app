@@ -50,6 +50,7 @@ function fakeApi(over = {}) {
     uploadStatus: vi.fn(async () => ({ received: [], totalChunks: 3 })),
     completeUpload: vi.fn(async () => META),
     cancelUpload: vi.fn(async () => null),
+    project: vi.fn(async () => ({ files: [], uploads: [] })),
     ...over,
   };
 }
@@ -289,6 +290,248 @@ describe("uploadFile", () => {
     });
     await expect(uploadFile(fakeFile(5), { api })).rejects.toBe(err);
     expect(api.putChunk).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---- fix wave: progress inside a chunk, 401, lost complete -------------------
+
+describe("progress inside a chunk", () => {
+  it("moves with the bytes sent, never backwards, below 1 until complete", async () => {
+    const seen = [];
+    let attempts = 0;
+    const api = fakeApi({
+      createUpload: vi.fn(async () => ({ uploadId: "u1", chunkSize: 1000, totalChunks: 1 })),
+      putChunk: vi.fn(async (id, n, blob, { onProgress }) => {
+        attempts += 1;
+        onProgress(250);
+        onProgress(500);
+        if (attempts === 1) throw httpError(503);
+        // The retry starts again from 0 bytes: the overall figure must not drop.
+        onProgress(100);
+        onProgress(1000);
+        return { received: [0] };
+      }),
+    });
+    vi.useFakeTimers();
+    const p = uploadFile(fakeFile(1000), { api, onProgress: (f) => seen.push(f) });
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(p).resolves.toBe(META);
+    expect(seen.slice(0, 2)).toEqual([0.25, 0.5]);
+    for (let i = 1; i < seen.length; i += 1) expect(seen[i]).toBeGreaterThanOrEqual(seen[i - 1]);
+    expect(seen.slice(0, -1).every((f) => f <= 0.99)).toBe(true);
+    expect(seen).toContain(0.99);
+    expect(seen.at(-1)).toBe(1);
+  });
+
+  it("adds the bytes of chunks in flight to the finished ones", async () => {
+    const seen = [];
+    const api = fakeApi({
+      uploadStatus: vi.fn(async () => ({ received: [0], totalChunks: 2 })),
+      putChunk: vi.fn(async (id, n, blob, { onProgress }) => {
+        onProgress(5);
+        return { received: [0, 1] };
+      }),
+    });
+    await uploadFile(fakeFile(20), { api, resume: { uploadId: "u1", chunkSize: 10 }, onProgress: (f) => seen.push(f) });
+    expect(seen.slice(0, 2)).toEqual([0.5, 0.75]);
+  });
+
+  it("ignores progress from an attempt that has already ended", async () => {
+    const seen = [];
+    let late = null;
+    const api = fakeApi({
+      createUpload: vi.fn(async () => ({ uploadId: "u1", chunkSize: 100, totalChunks: 2 })),
+      putChunk: vi.fn(async (id, n, blob, { onProgress }) => {
+        if (n === 0) {
+          late = onProgress;
+          return { received: [0] };
+        }
+        await new Promise((r) => setTimeout(r, 5));
+        return { received: [0, 1] };
+      }),
+    });
+    const p = uploadFile(fakeFile(200), { api, onProgress: (f) => seen.push(f) });
+    await new Promise((r) => setTimeout(r, 1));
+    late(100);
+    await p;
+    // Chunk 0 is done (0.5); its late event must not count its bytes twice.
+    expect(seen.filter((f) => f > 0.5 && f < 1)).toEqual([0.99]);
+  });
+
+  it("tells the caller the upload id once the upload is open", async () => {
+    const onOpened = vi.fn();
+    await uploadFile(fakeFile(20), { api: fakeApi(), onOpened });
+    expect(onOpened).toHaveBeenCalledWith("u1", 8);
+  });
+});
+
+describe("a 401 that survives the refresh", () => {
+  it("is retried, then pauses with the upload remembered", async () => {
+    vi.useFakeTimers();
+    const file = fakeFile(5);
+    const api = fakeApi({
+      createUpload: vi.fn(async () => ({ uploadId: "u1", chunkSize: 8, totalChunks: 1 })),
+      putChunk: vi.fn(async () => { throw httpError(401, "unauthorized"); }),
+    });
+    const p = uploadFile(file, { api });
+    const assertion = expect(p).rejects.toBeInstanceOf(UploadPausedError);
+    await vi.advanceTimersByTimeAsync(1000 + 3000 + 8000);
+    await assertion;
+    expect(api.putChunk).toHaveBeenCalledTimes(4);
+    expect(findInterrupted(file)).toEqual({ uploadId: "u1", chunkSize: 8 });
+  });
+});
+
+describe("a lost answer to complete", () => {
+  const STORED = { ...META, fileId: "u1" };
+
+  it("finds the finished file when complete fails without a response", async () => {
+    const file = fakeFile(20);
+    const api = fakeApi({
+      completeUpload: vi.fn(async () => { throw networkError(); }),
+      project: vi.fn(async () => ({ files: [{ ...META, fileId: "other" }, STORED], uploads: [] })),
+    });
+    const seen = [];
+    await expect(uploadFile(file, { api, onProgress: (f) => seen.push(f) })).resolves.toEqual(STORED);
+    expect(api.project).toHaveBeenCalledTimes(1);
+    expect(findInterrupted(file)).toBeNull();
+    expect(seen.at(-1)).toBe(1);
+  });
+
+  it("finds the finished file when complete answers 404 unknown_upload", async () => {
+    const file = fakeFile(20);
+    const api = fakeApi({
+      completeUpload: vi.fn(async () => { throw httpError(404, "unknown_upload"); }),
+      project: vi.fn(async () => ({ files: [STORED], uploads: [] })),
+    });
+    await expect(uploadFile(file, { api })).resolves.toEqual(STORED);
+    expect(findInterrupted(file)).toBeNull();
+  });
+
+  it("fails as before when the file is not on the server", async () => {
+    const file = fakeFile(20);
+    const lost = networkError();
+    const api = fakeApi({ completeUpload: vi.fn(async () => { throw lost; }) });
+    await expect(uploadFile(file, { api })).rejects.toBe(lost);
+    expect(api.project).toHaveBeenCalledTimes(1);
+    // Still remembered: Retry asks the status of this upload again.
+    expect(findInterrupted(file)).toEqual({ uploadId: "u1", chunkSize: 8 });
+  });
+
+  it("fails with complete's error when the project cannot be read either", async () => {
+    const lost = networkError();
+    const api = fakeApi({
+      completeUpload: vi.fn(async () => { throw lost; }),
+      project: vi.fn(async () => { throw networkError(); }),
+    });
+    await expect(uploadFile(fakeFile(20), { api })).rejects.toBe(lost);
+  });
+
+  it("does not look for the file after a refusal such as unreadable_file", async () => {
+    const refused = httpError(422, "unreadable_file");
+    const api = fakeApi({ completeUpload: vi.fn(async () => { throw refused; }) });
+    await expect(uploadFile(fakeFile(20), { api })).rejects.toBe(refused);
+    expect(api.project).not.toHaveBeenCalled();
+  });
+
+  it("on a resume whose upload is gone, returns the finished file instead of uploading again", async () => {
+    const file = fakeFile(20);
+    rememberUpload(file, "u1", 8);
+    const api = fakeApi({
+      uploadStatus: vi.fn(async () => { throw httpError(404, "unknown_upload"); }),
+      project: vi.fn(async () => ({ files: [STORED], uploads: [] })),
+    });
+    await expect(uploadFile(file, { api, resume: { uploadId: "u1", chunkSize: 8 } })).resolves.toEqual(STORED);
+    expect(api.createUpload).not.toHaveBeenCalled();
+    expect(api.putChunk).not.toHaveBeenCalled();
+    expect(api.completeUpload).not.toHaveBeenCalled();
+    expect(findInterrupted(file)).toBeNull();
+  });
+
+  it("on a resume whose upload is gone and not finished, starts a fresh upload", async () => {
+    const api = fakeApi({ uploadStatus: vi.fn(async () => { throw httpError(404, "unknown_upload"); }) });
+    await uploadFile(fakeFile(20), { api, resume: { uploadId: "gone", chunkSize: 8 } });
+    expect(api.project).toHaveBeenCalledTimes(1);
+    expect(api.createUpload).toHaveBeenCalledTimes(1);
+  });
+
+  it("on a resume, does not start a second upload when the project cannot be read", async () => {
+    const api = fakeApi({
+      uploadStatus: vi.fn(async () => { throw httpError(404, "unknown_upload"); }),
+      project: vi.fn(async () => { throw networkError(); }),
+    });
+    await expect(uploadFile(fakeFile(20), { api, resume: { uploadId: "u1", chunkSize: 8 } })).rejects.toMatchObject({ message: "Network Error" });
+    expect(api.createUpload).not.toHaveBeenCalled();
+  });
+});
+
+// ---- the stall watchdog, through the real http client ----------------------
+
+describe("stalled chunks", () => {
+  const original = studioHttp.defaults.adapter;
+  afterEach(() => { studioHttp.defaults.adapter = original; });
+
+  const ok = (config, data) => Promise.resolve({ status: 200, data: { data, message: null }, config, headers: {}, statusText: "" });
+
+  /** Chunk PUTs behave as `put(attempt, config)` says; everything else succeeds. */
+  function serve(put) {
+    const attempts = [];
+    studioHttp.defaults.adapter = (config) => {
+      if (config.method === "post" && config.url === "/uploads") return ok(config, { uploadId: "u1", chunkSize: 8, totalChunks: 1 });
+      if (config.method === "post" && config.url === "/uploads/u1/complete") return ok(config, META);
+      if (config.method === "put") {
+        attempts.push(config);
+        return put(attempts.length, config);
+      }
+      return Promise.reject(new AxiosError("no", "ERR_BAD_REQUEST", config, null, { status: 404, data: {}, config, headers: {} }));
+    };
+    return attempts;
+  }
+  const hang = (config) =>
+    new Promise((_, reject) => config.signal.addEventListener("abort", () => reject(new AxiosError("canceled", "ERR_CANCELED", config))));
+
+  it("aborts a chunk with no progress for 60 s and retries it", async () => {
+    vi.useFakeTimers();
+    store.token = "a1";
+    const attempts = serve((n, config) => (n === 1 ? hang(config) : ok(config, { received: [0] })));
+    const p = uploadFile(new File([new Uint8Array(5)], "a.mp4", { lastModified: 1 }), { api: studioApi });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(attempts[0].signal.aborted).toBe(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(p).resolves.toEqual(META);
+    expect(attempts).toHaveLength(2);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("keeps a slow chunk that is still moving, past 180 s", async () => {
+    vi.useFakeTimers();
+    store.token = "a1";
+    const attempts = serve((n, config) =>
+      new Promise((resolve) => {
+        let loaded = 0;
+        const tick = setInterval(() => { loaded += 1; config.onUploadProgress({ loaded }); }, 20_000);
+        setTimeout(() => { clearInterval(tick); resolve(ok(config, { received: [0] })); }, 300_000);
+      }));
+    const p = uploadFile(new File([new Uint8Array(5)], "a.mp4", { lastModified: 1 }), { api: studioApi });
+    await vi.advanceTimersByTimeAsync(300_000);
+    await expect(p).resolves.toEqual(META);
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0].signal.aborted).toBe(false);
+  });
+
+  it("a user abort is still an AbortError and is not retried", async () => {
+    vi.useFakeTimers();
+    store.token = "a1";
+    const attempts = serve((n, config) => hang(config));
+    const ac = new AbortController();
+    const p = uploadFile(new File([new Uint8Array(5)], "a.mp4", { lastModified: 1 }), { api: studioApi, signal: ac.signal });
+    const assertion = expect(p).rejects.toMatchObject({ name: "AbortError" });
+    await vi.advanceTimersByTimeAsync(30_000);
+    ac.abort();
+    await assertion;
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(attempts).toHaveLength(1);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 
