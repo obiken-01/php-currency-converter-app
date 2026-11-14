@@ -101,15 +101,36 @@ function ClearDialog({ open, onClose, onConfirm }) {
   );
 }
 
-export default function RenderStep({ state, job, downloading, clearing, actions }) {
+export default function RenderStep({ state, job, downloading, actions }) {
   const [confirming, setConfirming] = useState(false);
   const enabled = Boolean(state.draft || job);
   const problems = state.draft ? slotProblems(state.draft.editList, filesById(state)) : [];
   const summary = problemSummary(problems);
   const allowed = canRender(state, job);
+  const { clearing } = state;
+
+  const footer = (
+    <Box sx={{ mt: 1.5, pt: 1, borderTop: "1px solid", borderColor: "divider" }}>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ sm: "center" }} justifyContent="space-between">
+        <Typography variant="caption" color="text.secondary">
+          {ttlLine(state.limits)}
+        </Typography>
+        <Button
+          variant="outlined"
+          color="error"
+          size="small"
+          onClick={() => setConfirming(true)}
+          disabled={clearing || state.phase !== "ready"}
+          startIcon={clearing ? <CircularProgress size={14} color="inherit" /> : null}
+        >
+          Clear files
+        </Button>
+      </Stack>
+    </Box>
+  );
 
   return (
-    <StepCard number="4" title="Render">
+    <StepCard number="4" title="Render" disabled={!enabled} footer={footer}>
       <Stack spacing={1.5}>
         {!enabled && (
           <Typography variant="body2" color="text.secondary">
@@ -138,26 +159,8 @@ export default function RenderStep({ state, job, downloading, clearing, actions 
           onRetry={actions.render}
           onCheckAgain={actions.checkAgain}
           onDownload={actions.download}
-          downloading={downloading}
+          downloading={downloading || state.clearing}
         />
-
-        <Box sx={{ pt: 1, borderTop: "1px solid", borderColor: "divider" }}>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ sm: "center" }} justifyContent="space-between">
-            <Typography variant="caption" color="text.secondary">
-              {ttlLine(state.limits)}
-            </Typography>
-            <Button
-              variant="outlined"
-              color="error"
-              size="small"
-              onClick={() => setConfirming(true)}
-              disabled={clearing || state.phase !== "ready"}
-              startIcon={clearing ? <CircularProgress size={14} color="inherit" /> : null}
-            >
-              Clear files
-            </Button>
-          </Stack>
-        </Box>
       </Stack>
 
       <ClearDialog

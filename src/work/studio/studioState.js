@@ -19,6 +19,7 @@ export const AUDIO_MODES = ["music", "silent"];
 export const MAX_PARALLEL_UPLOADS = 2;
 export const INTERRUPTED_HINT = "Choose this file again to resume.";
 export const LOST_RENDER = "The service restarted, please render again.";
+export const GONE_RENDER = "This video is no longer on the server. Render it again.";
 export const STALE_DRAFT = "This draft is out of date. Make a new draft to render.";
 export const DRAFT_NOT_KEPT = "Drafts are not kept after a reload. Make a new draft.";
 
@@ -53,12 +54,13 @@ export const initialState = {
   templateList: null, // the chosen template's edit list (Skip edits it) until a draft exists
   seed: null,
   draft: null, // { editList, warnings, request }
-  drafting: null, // "draft" | "reshuffle" | null
+  drafting: null, // "draft" | "reshuffle" | "autofill" | null
   draftError: null,
-  draftErrorFrom: null, // "draft" | "reshuffle": which button's error it is
-  job: null, // { jobId, status, percent, position, message }
+  draftErrorFrom: null, // "draft" | "reshuffle" | "autofill": which button's error it is
+  job: null, // { jobId, status, percent, position, message, restored, lost }
   rendering: false,
   renderError: null,
+  clearing: false,
 };
 
 // ---- rows -----------------------------------------------------------------
@@ -113,11 +115,25 @@ export function projectSnapshot(project) {
  * kind is kindOf(file) and remembered is findInterrupted(file). Returns rows to add, rows to requeue,
  * the upload queue entries, song rows the new song replaces, and notices.
  */
-export function planPick(state, picks) {
+export function planPick(state, allPicks) {
   const notices = [];
   const add = [];
   const queue = [];
   const claimed = new Set();
+  // A file already on its way must not get a second uploader on the same upload.
+  const busy = new Set(
+    state.files.filter((r) => ["waiting", "uploading", "paused"].includes(r.status)).map((r) => `${r.name}|${r.size}`),
+  );
+  const picks = [];
+  for (const p of allPicks) {
+    const key = `${p.file.name}|${p.file.size}`;
+    if (p.kind && busy.has(key)) {
+      notices.push(`${p.file.name} is already uploading.`);
+      continue;
+    }
+    if (p.kind) busy.add(key);
+    picks.push(p);
+  }
   const songs = picks.filter((p) => p.kind === "audio");
   const song = songs.length > 0 ? songs[songs.length - 1] : null;
   let songRowId = null;
@@ -194,10 +210,13 @@ export function musicFile(state) {
 }
 
 /** At least one video or photo and the song, all uploaded. */
+/** Files can be added once the project is loaded, and not while it is being cleared. */
+export const canPick = (state) => state.phase === "ready" && !state.clearing;
+
 export const inputsReady = (state) => state.phase === "ready" && visualFiles(state).length > 0 && musicFile(state) !== null;
 
 export const canMakeDraft = (state) =>
-  inputsReady(state) && !state.startError && state.drafting === null && (!state.options.templateId || state.templateList !== null);
+  inputsReady(state) && !state.clearing && !state.startError && state.drafting === null && (!state.options.templateId || state.templateList !== null);
 
 export function draftRequest(state, seed) {
   const { aspect, pace, length, startSec, audioMode, templateId } = state.options;
@@ -236,6 +255,7 @@ const ACTIVE = ["queued", "running"];
 export function jobView(job, data, pollError) {
   if (!job) return null;
   const merged = { ...job, ...(data ?? {}), pollError: null };
+  if (job.lost) return { ...merged, status: "lost" };
   if (pollError) {
     if (pollError.code === "unknown_render") return { ...merged, status: "lost" };
     return { ...merged, pollError: pollError.message };
@@ -246,7 +266,7 @@ export function jobView(job, data, pollError) {
 export const jobActive = (view) => Boolean(view && ACTIVE.includes(view.status));
 
 export function canRender(state, view) {
-  if (!state.draft || state.rendering || draftStale(state)) return false;
+  if (!state.draft || state.rendering || state.clearing || draftStale(state)) return false;
   if (jobActive(view ?? (state.job ? jobView(state.job, null, null) : null))) return false;
   return slotProblems(state.draft.editList, filesById(state)).length === 0;
 }
@@ -351,7 +371,9 @@ export function renderLine(view) {
     case "failed":
       return view.message || "The render failed.";
     case "lost":
-      return LOST_RENDER;
+      // A render found on the server at page load and gone since expired;
+      // one that vanishes while this page polls it means a restart.
+      return view.restored ? GONE_RENDER : LOST_RENDER;
     default:
       return "";
   }
@@ -370,7 +392,7 @@ export function reducer(state, action) {
         limits: action.project.limits ?? null,
         usedBytes: action.project.usedBytes ?? 0,
         files: snap.files,
-        job: snap.job,
+        job: snap.job ? { ...snap.job, restored: true, lost: false } : null,
         restored: snap.files.length > 0 || snap.job !== null,
       };
     }
@@ -378,6 +400,10 @@ export function reducer(state, action) {
       return { ...state, phase: "error", loadError: action.message };
     case "usage/loaded":
       return { ...state, usedBytes: action.usedBytes ?? state.usedBytes, limits: action.limits ?? state.limits };
+    case "clear/started":
+      return { ...state, clearing: true };
+    case "clear/failed":
+      return { ...state, clearing: false };
     case "project/cleared":
       return { ...initialState, phase: "ready", limits: state.limits };
 
@@ -482,8 +508,11 @@ export function reducer(state, action) {
       return {
         ...state,
         rendering: false,
-        job: { jobId: action.jobId, status: "queued", percent: 0, position: null, message: null },
+        job: { jobId: action.jobId, status: "queued", percent: 0, position: null, message: null, restored: false, lost: false },
       };
+    case "job/lost":
+      if (state.job?.jobId !== action.jobId) return state;
+      return { ...state, job: { ...state.job, lost: true } };
     case "render/failed":
       if (!state.rendering) return state;
       return { ...state, rendering: false, renderError: action.message };

@@ -7,7 +7,7 @@ import { errorCode, errorMessage, studioApi } from "./studioApi";
 import { findInterrupted, forgetAllUploads, forgetUpload, kindOf, uploadFile } from "./upload/chunks";
 import { createUploadQueue } from "./upload/uploadQueue";
 import { loadTemplates, saveTemplate, toTemplate } from "./templates";
-import { MAX_PARALLEL_UPLOADS, draftRequest, initialState, jobView, planPick, projectSnapshot, reducer } from "./studioState";
+import { MAX_PARALLEL_UPLOADS, canPick, draftRequest, initialState, jobView, planPick, projectSnapshot, reducer } from "./studioState";
 
 const POLL_MS = 2000;
 
@@ -50,31 +50,34 @@ export function useStudio() {
   const toast = useToast();
   const alive = useRef(true);
   const files = useRef(new Map()); // localId -> File, for rows picked in this visit
+  // localId -> meta of uploads that finished in this visit. A row can still look
+  // "uploading" to a handler that runs before the re-render; this tells it the
+  // file exists on the server.
+  const completed = useRef(new Map());
   const onEvent = useRef(null);
   const loadStarted = useRef(false);
   const [templates, setTemplates] = useState(loadTemplates);
   const [downloading, setDownloading] = useState(false);
-  const [clearing, setClearing] = useState(false);
 
-  const [queue] = useState(() =>
-    createUploadQueue({
+  const queueRef = useRef(null);
+
+  // The upload queue lives as long as the page. Leaving the page aborts every
+  // upload (the server keeps what arrived, so it can resume later) and
+  // silences every callback. StrictMode's extra mount gets a fresh queue; the
+  // first one is disposed while still empty.
+  useEffect(() => {
+    alive.current = true;
+    const queue = createUploadQueue({
       limit: MAX_PARALLEL_UPLOADS,
       run: (item, { signal, onProgress }) => uploadFile(item.file, { signal, onProgress, resume: item.resume ?? undefined }),
       onEvent: (event) => onEvent.current?.(event),
-    }),
-  );
-
-  // Leaving the page aborts every upload (the server keeps what arrived, so it
-  // can resume later) and silences every callback. StrictMode runs this
-  // cleanup once at mount, before anything is queued; revive undoes it.
-  useEffect(() => {
-    alive.current = true;
-    queue.revive();
+    });
+    queueRef.current = queue;
     return () => {
       alive.current = false;
       queue.dispose();
     };
-  }, [queue]);
+  }, []);
 
   // Load the project once, also under StrictMode's double effect.
   useEffect(() => {
@@ -113,6 +116,7 @@ export function useStudio() {
         break;
       case "done":
         files.current.delete(id);
+        completed.current.set(id, event.meta);
         send({ type: "upload/done", localId: id, meta: event.meta });
         if (event.meta?.kind === "audio") runAnalysis(event.meta.fileId, send, alive);
         refreshUsage(send, alive);
@@ -146,19 +150,22 @@ export function useStudio() {
 
   function enqueue(localId, file, resume) {
     files.current.set(localId, file);
-    queue.add({ id: localId, file, resume });
+    queueRef.current?.add({ id: localId, file, resume });
   }
 
   /** Removes what the server holds for a row. Throws when the server call fails. */
   async function discardOnServer(row) {
     const file = files.current.get(row.localId);
     files.current.delete(row.localId);
-    if (row.status === "done" && row.meta) {
-      await ignore404(studioApi.deleteFile(row.meta.fileId));
+    const meta = row.meta ?? completed.current.get(row.localId);
+    completed.current.delete(row.localId);
+    if (meta) {
+      await ignore404(studioApi.deleteFile(meta.fileId));
       return;
     }
     let uploadId = row.uploadId;
-    if (queue.has(row.localId)) {
+    const queue = queueRef.current;
+    if (queue?.has(row.localId)) {
       const result = await queue.cancel(row.localId);
       if (result.status === "done") {
         // It finished while being cancelled.
@@ -175,6 +182,7 @@ export function useStudio() {
   // ---- step 1 -------------------------------------------------------------
 
   function pickFiles(fileList) {
+    if (!canPick(state)) return;
     const picks = Array.from(fileList ?? []).map((file) => {
       const kind = kindOf(file);
       return { localId: newLocalId(), file, kind, remembered: kind ? findInterrupted(file) : null };
@@ -210,7 +218,8 @@ export function useStudio() {
   function resumeRow(row) {
     const file = files.current.get(row.localId);
     if (!file) return;
-    const resume = findInterrupted(file) ?? (row.uploadId && state.limits ? { uploadId: row.uploadId, chunkSize: state.limits.chunkSize } : null);
+    const chunkSize = row.chunkSize ?? state.limits?.chunkSize;
+    const resume = findInterrupted(file) ?? (row.uploadId && chunkSize ? { uploadId: row.uploadId, chunkSize } : null);
     dispatch({ type: "upload/requeued", localId: row.localId });
     enqueue(row.localId, file, resume);
   }
@@ -305,7 +314,11 @@ export function useStudio() {
           link.remove();
           say.info("Download started. The video is deleted from the server 15 minutes later.");
         },
-        (error) => say.error(errorMessage(error)),
+        (error) => {
+          // The render is gone: say so on the page, not only in a toast.
+          if (errorCode(error) === "unknown_render") send({ type: "job/lost", jobId });
+          else say.error(errorMessage(error));
+        },
       )
       .finally(() => {
         if (alive.current) setDownloading(false);
@@ -313,17 +326,19 @@ export function useStudio() {
   }
 
   async function clearAll() {
-    setClearing(true);
-    const stopped = await queue.cancelAll();
+    dispatch({ type: "clear/started" });
+    const stopped = queueRef.current ? await queueRef.current.cancelAll() : {};
     try {
       await studioApi.clearProject();
       forgetAllUploads();
       files.current.clear();
+      completed.current.clear();
       send({ type: "project/cleared" });
       refreshUsage(send, alive);
       say.success("All files and renders are deleted.");
     } catch (error) {
       say.error(errorMessage(error));
+      send({ type: "clear/failed" });
       // Nothing was deleted: put the stopped uploads back.
       for (const [id, result] of Object.entries(stopped)) {
         const file = files.current.get(id);
@@ -333,8 +348,6 @@ export function useStudio() {
           enqueue(id, file, findInterrupted(file));
         }
       }
-    } finally {
-      if (alive.current) setClearing(false);
     }
   }
 
@@ -343,7 +356,6 @@ export function useStudio() {
     job,
     templates,
     downloading,
-    clearing,
     actions: {
       pickFiles,
       removeRow,
@@ -355,6 +367,7 @@ export function useStudio() {
       chooseTemplate,
       makeDraft: () => makeDraft("draft"),
       reshuffle: () => makeDraft("reshuffle"),
+      autofill: () => makeDraft("autofill"),
       saveAsTemplate,
       fillSlot: (index, file, inSec) => dispatch({ type: "slot/filled", index, file, inSec }),
       skipSlot: (index) => dispatch({ type: "slot/skipped", index }),

@@ -3,6 +3,7 @@ import {
   DEFAULT_OPTIONS,
   INTERRUPTED_HINT,
   canMakeDraft,
+  canPick,
   canRender,
   draftHeader,
   draftRequest,
@@ -19,6 +20,8 @@ import {
   problemSummary,
   projectSnapshot,
   reducer,
+  GONE_RENDER,
+  LOST_RENDER,
   renderLine,
   restartLabel,
   rowStatusText,
@@ -545,7 +548,7 @@ describe("render", () => {
     expect(canRender(s, null)).toBe(false);
     s = reducer(s, { type: "render/created", jobId: "j1" });
     expect(s.rendering).toBe(false);
-    expect(s.job).toEqual({ jobId: "j1", status: "queued", percent: 0, position: null, message: null });
+    expect(s.job).toEqual({ jobId: "j1", status: "queued", percent: 0, position: null, message: null, restored: false, lost: false });
     const view = jobView(s.job, { status: "running", percent: 10 }, null);
     expect(canRender(s, view)).toBe(false);
     expect(canRender(s, jobView(s.job, { status: "done", percent: 100 }, null))).toBe(true);
@@ -645,5 +648,86 @@ describe("copy", () => {
     expect(problemSummary([])).toBeNull();
     expect(problemSummary([{ index: 2 }])).toBe("Fix slot 3 before rendering.");
     expect(problemSummary([{ index: 0 }, { index: 4 }])).toBe("Fix slots 1, 5 before rendering.");
+  });
+});
+
+describe("fix round 1", () => {
+  const withDraft = () => {
+    const s = ready();
+    return reducer(reducer(s, { type: "draft/started", mode: "draft", seed: 1 }), {
+      type: "draft/done",
+      editList: editList([videoSeg("v1", 0, 2)]),
+      warnings: [],
+      request: draftRequest(s, 1),
+    });
+  };
+
+  it("skips a pick that matches a row still waiting, uploading or paused", () => {
+    const s0 = loaded();
+    const f = file("a.mp4", 10);
+    let s = reducer(s0, { type: "files/picked", plan: planPick(s0, [pick("a", f)]) });
+    for (const step of [null, { type: "upload/started", localId: "a" }, { type: "upload/paused", localId: "a", uploadId: "u1" }]) {
+      if (step) s = reducer(s, step);
+      const plan = planPick(s, [pick("again", file("a.mp4", 10), { uploadId: "u1", chunkSize: 8 }), pick("b", file("b.mp4", 5))]);
+      expect(plan.notices).toEqual(["a.mp4 is already uploading."]);
+      expect(plan.add.map((r) => r.localId)).toEqual(["b"]);
+      expect(plan.queue.map((q) => q.localId)).toEqual(["b"]);
+    }
+    // A different size is a different file.
+    expect(planPick(s, [pick("c", file("a.mp4", 11))]).add).toHaveLength(1);
+  });
+
+  it("a song already uploading does not replace itself", () => {
+    const s0 = loaded();
+    const s = reducer(s0, { type: "files/picked", plan: planPick(s0, [pick("s", file("song.mp3", 50))]) });
+    const plan = planPick(s, [pick("again", file("song.mp3", 50))]);
+    expect(plan.replaced).toEqual([]);
+    expect(plan.notices).toEqual(["song.mp3 is already uploading."]);
+  });
+
+  it("nothing can be picked, drafted or rendered while Clear files runs", () => {
+    let s = withDraft();
+    expect(canPick(s)).toBe(true);
+    expect(canMakeDraft(s)).toBe(true);
+    expect(canRender(s, null)).toBe(true);
+    s = reducer(s, { type: "clear/started" });
+    expect(canPick(s)).toBe(false);
+    expect(canMakeDraft(s)).toBe(false);
+    expect(canRender(s, null)).toBe(false);
+    const failed = reducer(s, { type: "clear/failed" });
+    expect(canPick(failed)).toBe(true);
+    const cleared = reducer(s, { type: "project/cleared" });
+    expect(cleared.clearing).toBe(false);
+    expect(canPick(cleared)).toBe(true);
+    expect(canPick(initialState)).toBe(false);
+  });
+
+  it("Auto-fill has its own working state and error", () => {
+    let s = reducer(ready(), { type: "draft/started", mode: "autofill", seed: 1 });
+    expect(s.drafting).toBe("autofill");
+    s = reducer(s, { type: "draft/failed", message: "The template is longer than the song." });
+    expect(s.draftErrorFrom).toBe("autofill");
+  });
+
+  it("a restored render the server no longer has says so", () => {
+    const s = loaded({ renders: [{ jobId: "j1", status: "done", percent: 100, position: null, message: null }] });
+    expect(s.job.restored).toBe(true);
+    const lostByPoll = jobView(s.job, undefined, { code: "unknown_render", message: "gone" });
+    expect(renderLine(lostByPoll)).toBe("This video is no longer on the server. Render it again.");
+    expect(GONE_RENDER).toBe("This video is no longer on the server. Render it again.");
+    // A 404 on the download link marks the job lost too.
+    const after = reducer(s, { type: "job/lost", jobId: "j1" });
+    expect(renderLine(jobView(after.job, { status: "done" }, null))).toBe(GONE_RENDER);
+    expect(reducer(s, { type: "job/lost", jobId: "other" })).toBe(s);
+  });
+
+  it("a render that disappears while this page polls it keeps the restart sentence", () => {
+    let s = reducer(withDraft(), { type: "render/started" });
+    s = reducer(s, { type: "render/created", jobId: "j2" });
+    expect(renderLine(jobView(s.job, undefined, { code: "unknown_render", message: "gone" }))).toBe(LOST_RENDER);
+    expect(LOST_RENDER).toBe("The service restarted, please render again.");
+    s = reducer(s, { type: "job/lost", jobId: "j2" });
+    expect(renderLine(jobView(s.job, null, null))).toBe(LOST_RENDER);
+    expect(canRender(s, jobView(s.job, null, null))).toBe(true);
   });
 });

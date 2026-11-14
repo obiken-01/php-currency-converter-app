@@ -8,7 +8,7 @@ import RenderStep from "./components/RenderStep";
 
 /** The four steps. Mounted only for an allowed user, so nothing loads otherwise. */
 function Studio() {
-  const { state, job, templates, downloading, clearing, actions } = useStudio();
+  const { state, job, templates, downloading, actions } = useStudio();
 
   return (
     <Box sx={{ minWidth: 0 }}>
@@ -19,7 +19,7 @@ function Studio() {
         <UploadStep state={state} actions={actions} />
         <OptionsStep state={state} templates={templates} actions={actions} />
         <DraftStep state={state} templates={templates} actions={actions} />
-        <RenderStep state={state} job={job} downloading={downloading} clearing={clearing} actions={actions} />
+        <RenderStep state={state} job={job} downloading={downloading} actions={actions} />
       </Stack>
     </Box>
   );

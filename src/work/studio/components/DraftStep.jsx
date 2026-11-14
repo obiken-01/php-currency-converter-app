@@ -171,7 +171,7 @@ export default function DraftStep({ state, templates, actions }) {
   const clips = visualFiles(state);
   const byId = Object.fromEntries(clips.map((f) => [f.fileId, f]));
   const reshuffling = state.drafting === "reshuffle";
-  const filling = state.drafting === "draft";
+  const filling = state.drafting === "autofill";
   const enabled = Boolean(rows) || inputsReady(state);
   const template = templates.find((t) => t.id === state.options.templateId);
 
@@ -198,7 +198,7 @@ export default function DraftStep({ state, templates, actions }) {
       <Button
         variant="outlined"
         size="small"
-        onClick={actions.makeDraft}
+        onClick={actions.autofill}
         disabled={!canMakeDraft(state)}
         startIcon={filling ? <CircularProgress size={14} color="inherit" /> : null}
       >
@@ -230,7 +230,7 @@ export default function DraftStep({ state, templates, actions }) {
             </Typography>
           )}
           {!rows.preview && draftStale(state) && <Alert severity="info">{STALE_DRAFT}</Alert>}
-          {state.draftError && state.draftErrorFrom === "reshuffle" && <Alert severity="error">{state.draftError}</Alert>}
+          {state.draftError && (state.draftErrorFrom === "reshuffle" || state.draftErrorFrom === "autofill") && <Alert severity="error">{state.draftError}</Alert>}
           {!rows.preview &&
             warningLines(state.draft.warnings).map((line) => (
               <Alert key={line} severity="warning">

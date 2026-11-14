@@ -11,7 +11,7 @@ import {
 } from "@mui/material";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import StepCard from "./StepCard";
-import { formatSize, restartLabel, rowStatusText, usageLine } from "../studioState";
+import { canPick, formatSize, restartLabel, rowStatusText, usageLine } from "../studioState";
 
 const ACCEPT = "video/mp4,video/quicktime,image/*,audio/*,.heic,.heif,.m4a";
 
@@ -41,7 +41,7 @@ function MusicLine({ analysis }) {
   );
 }
 
-function FileRow({ row, analysis, actions }) {
+function FileRow({ row, analysis, locked, actions }) {
   const showBar = row.status === "uploading" || row.status === "paused" || row.status === "interrupted";
   const restart = restartLabel(row);
   const cancellable = ["waiting", "uploading", "paused", "interrupted"].includes(row.status);
@@ -78,22 +78,22 @@ function FileRow({ row, analysis, actions }) {
         </Box>
         <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ flexShrink: 0 }}>
           {row.status === "paused" && (
-            <Button size="small" onClick={() => actions.resumeRow(row)} disabled={row.busy}>
+            <Button size="small" onClick={() => actions.resumeRow(row)} disabled={row.busy || locked}>
               Resume
             </Button>
           )}
           {restart && (
-            <Button size="small" onClick={() => actions.restartRow(row)} disabled={row.busy}>
+            <Button size="small" onClick={() => actions.restartRow(row)} disabled={row.busy || locked}>
               {restart}
             </Button>
           )}
           {cancellable && (
-            <Button size="small" color="inherit" onClick={() => actions.removeRow(row)} disabled={row.busy}>
+            <Button size="small" color="inherit" onClick={() => actions.removeRow(row)} disabled={row.busy || locked}>
               Cancel
             </Button>
           )}
           {(row.status === "done" || row.status === "error") && (
-            <Button size="small" color="error" onClick={() => actions.removeRow(row)} disabled={row.busy}>
+            <Button size="small" color="error" onClick={() => actions.removeRow(row)} disabled={row.busy || locked}>
               Remove
             </Button>
           )}
@@ -105,7 +105,7 @@ function FileRow({ row, analysis, actions }) {
 
 export default function UploadStep({ state, actions }) {
   const [over, setOver] = useState(false);
-  const ready = state.phase === "ready";
+  const ready = canPick(state);
   const usage = usageLine(state);
 
   const onDrop = (event) => {
@@ -180,17 +180,18 @@ export default function UploadStep({ state, actions }) {
 
         {state.notices.length > 0 && (
           <Alert severity="warning" onClose={actions.dismissNotices}>
-            {state.notices.map((line) => (
-              <Box key={line}>{line}</Box>
+            {state.notices.map((line, i) => (
+              // Two rejected files can share a name, so the index is the key.
+              <Box key={i}>{line}</Box>
             ))}
           </Alert>
         )}
 
         {state.files.map((row) => (
-          <FileRow key={row.localId} row={row} analysis={state.analysis} actions={actions} />
+          <FileRow key={row.localId} row={row} analysis={state.analysis} locked={state.clearing} actions={actions} />
         ))}
 
-        {ready && state.files.length === 0 && (
+        {state.phase === "ready" && state.files.length === 0 && (
           <Typography variant="body2" color="text.secondary">
             No files yet. Add a few clips or photos and one song.
           </Typography>
